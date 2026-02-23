@@ -1,0 +1,4 @@
+[workspace]
+resolver = "3"
+packages = [ "db" , "backend", "ws", "common" ]
+members = ["db" , "backend", "ws", "common"]
