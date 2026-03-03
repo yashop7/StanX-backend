@@ -1,23 +1,31 @@
-use actix_web::{App, HttpServer, web};
+use axum::{routing::post, Router};
 use db::Db;
 use dotenvy;
+use std::sync::Arc;
 
 use crate::routes::user::{create_user, signin};
+use crate::state::state::AppState;
 pub mod routes;
 pub mod middleware;
+pub mod state;
 
-#[actix_web::main]
+#[tokio::main]
 async fn main() {
     dotenvy::from_filename("backend/.env").ok();
-    let db = web::Data::new(Db::new().await.unwrap());
-    let _ = HttpServer::new(move || {
-        App::new()
-            .service(web::resource("/signup").route(web::post().to(create_user)))
-            .service(web::resource("/signin").route(web::post().to(signin)))
-            .app_data(db.clone())
-    })
-    .bind("0.0.0.0:3000")
-    .unwrap()
-    .run()
-    .await;
+    let db = Arc::new(Db::new().await.unwrap());
+    
+    let app_state = AppState { db };
+    
+    let app = Router::new()
+        .route("/signup", post(create_user))
+        .route("/signin", post(signin))
+        .with_state(app_state);
+
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
+        .await
+        .unwrap();
+    
+    println!("Server running on http://0.0.0.0:3000");
+    
+    axum::serve(listener, app).await.unwrap();
 }

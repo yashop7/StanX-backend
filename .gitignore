@@ -18,3 +18,4 @@
 Thumbs.db
 
 .env
+/rust-sdk

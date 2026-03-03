@@ -1,6 +1,10 @@
-use actix_web::{dev::Payload, error::ErrorUnauthorized, web, FromRequest, HttpRequest};
+use axum::{
+    async_trait,
+    extract::FromRequestParts,
+    http::{request::Parts, StatusCode},
+};
 use jsonwebtoken::{decode, DecodingKey, Validation};
-use std::{env, future::Ready, future::ready};
+use std::env;
 
 use crate::routes::user::Claims;
 
@@ -10,30 +14,34 @@ pub struct JwtClaims(pub Claims); // we can access this by jwt_claims.0
 //     pub claims: Claims
 // }
 
-impl FromRequest for JwtClaims {
-    type Error = actix_web::Error;
-    type Future = Ready<Result<Self, Self::Error>>;
+#[async_trait]
+impl<S> FromRequestParts<S> for JwtClaims
+where
+    S: Send + Sync,
+{
+    type Rejection = (StatusCode, String);
 
-    fn from_request(req: &HttpRequest, _: &mut Payload) -> Self::Future {
-        let auth_header = req.headers().get("Authorization");
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        let auth_header = parts.headers.get("Authorization");
 
         if let Some(header_value) = auth_header {
             if let Ok(token) = header_value.to_str() {
-                let secret = env::var("SECRET_KEY").expect("JWT_SECRET must be set");
+                let secret = env::var("SECRET_KEY")
+                    .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "JWT_SECRET must be set".to_string()))?;
                 let decoding_key = DecodingKey::from_secret(secret.as_bytes());
                 let validation = Validation::default();
 
                 match decode::<Claims>(token, &decoding_key, &validation) {
                     Ok(token_data) => {
-                        return ready(Ok(JwtClaims(token_data.claims)));
+                        return Ok(JwtClaims(token_data.claims));
                     }
                     Err(e) => {
                         eprintln!("JWT decoding error: {:?}", e);
-                        return ready(Err(ErrorUnauthorized("Invalid JWT token")));
+                        return Err((StatusCode::UNAUTHORIZED, "Invalid JWT token".to_string()));
                     }
                 }
             }
         }
-        ready(Err(ErrorUnauthorized("Authorization header missing or invalid")))
+        Err((StatusCode::UNAUTHORIZED, "Authorization header missing or invalid".to_string()))
     }
 }

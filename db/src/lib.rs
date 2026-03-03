@@ -1,16 +1,23 @@
+use anyhow::Result;
+use serde::{Deserialize, Serialize};
+use sqlx::{PgPool, postgres::PgPoolOptions};
+use std::env;
+
 pub mod models;
 
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
+pub struct Db {
+    pub pool: PgPool,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+impl Db {
+    pub async fn new() -> Result<Self> {
+        let db_url = env::var("DATABASE_URL")?;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
+        let pool = PgPoolOptions::new()
+            .max_connections(5)
+            .connect(&db_url)
+            .await?;
+
+        Ok(Self { pool })
     }
 }
