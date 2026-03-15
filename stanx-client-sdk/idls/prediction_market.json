@@ -1,7 +1,7 @@
 {
-  "address": "3m15q3KrkBVymw3RupCWfqSfThbX3KRfspNaN52DdDBh",
+  "address": "AA9xwyVDCqHJTSPtigKyvLhaMpgjmU7CCT99SXWt43DP",
   "metadata": {
-    "name": "prediction_market",
+    "name": "prediction_market_turbin3",
     "version": "0.1.0",
     "spec": "0.1.0",
     "description": "Created with Anchor"
@@ -117,11 +117,13 @@
         },
         {
           "name": "user_outcome_yes",
-          "writable": true
+          "writable": true,
+          "optional": true
         },
         {
           "name": "user_outcome_no",
-          "writable": true
+          "writable": true,
+          "optional": true
         },
         {
           "name": "yes_escrow",
@@ -136,8 +138,11 @@
           "address": "11111111111111111111111111111111"
         },
         {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "token_program"
         }
       ],
       "args": [
@@ -152,12 +157,291 @@
       ]
     },
     {
-      "name": "claim_rewards",
-      "docs": [
-        "Claim rewards after market settlement",
-        "User must have winning outcome tokens to claim",
-        "Winning tokens are burned and collateral is transferred to user"
+      "name": "claim_funds",
+      "discriminator": [
+        145,
+        36,
+        143,
+        242,
+        168,
+        66,
+        200,
+        155
       ],
+      "accounts": [
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.market_id",
+                "account": "Market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user_stats",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  115
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "market_id"
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "collateral_mint"
+        },
+        {
+          "name": "outcome_yes_mint"
+        },
+        {
+          "name": "outcome_no_mint"
+        },
+        {
+          "name": "user_collateral",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "user"
+              },
+              {
+                "kind": "account",
+                "path": "token_program"
+              },
+              {
+                "kind": "account",
+                "path": "collateral_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "collateral_vault",
+          "writable": true
+        },
+        {
+          "name": "user_outcome_yes",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "user"
+              },
+              {
+                "kind": "account",
+                "path": "token_program"
+              },
+              {
+                "kind": "account",
+                "path": "outcome_yes_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "user_outcome_no",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "user"
+              },
+              {
+                "kind": "account",
+                "path": "token_program"
+              },
+              {
+                "kind": "account",
+                "path": "outcome_no_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "yes_escrow",
+          "writable": true
+        },
+        {
+          "name": "no_escrow",
+          "writable": true
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "market_id",
+          "type": "u32"
+        }
+      ]
+    },
+    {
+      "name": "claim_rewards",
       "discriminator": [
         4,
         144,
@@ -199,8 +483,95 @@
           }
         },
         {
+          "name": "user_stats",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  115
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "market_id"
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "collateral_mint"
+        },
+        {
           "name": "user_collateral",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "user"
+              },
+              {
+                "kind": "account",
+                "path": "token_program"
+              },
+              {
+                "kind": "account",
+                "path": "collateral_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
         },
         {
           "name": "collateral_vault",
@@ -223,24 +594,26 @@
           "writable": true
         },
         {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
         {
-          "name": "_market_id",
+          "name": "market_id",
           "type": "u32"
         }
       ]
     },
     {
       "name": "close_market",
-      "docs": [
-        "Close the market and reclaim rent",
-        "Can only be called after market is settled",
-        "All orders must be cancelled or filled before closing"
-      ],
       "discriminator": [
         88,
         154,
@@ -311,7 +684,7 @@
       ],
       "args": [
         {
-          "name": "_market_id",
+          "name": "market_id",
           "type": "u32"
         }
       ]
@@ -519,12 +892,11 @@
           "address": "11111111111111111111111111111111"
         },
         {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
         },
         {
-          "name": "rent",
-          "address": "SysvarRent111111111111111111111111111111111"
+          "name": "token_program"
         }
       ],
       "args": [
@@ -535,6 +907,10 @@
         {
           "name": "settlement_deadline",
           "type": "i64"
+        },
+        {
+          "name": "meta_data_url",
+          "type": "string"
         }
       ]
     },
@@ -647,12 +1023,124 @@
           }
         },
         {
+          "name": "outcome_yes_mint"
+        },
+        {
+          "name": "outcome_no_mint"
+        },
+        {
           "name": "user_outcome_yes",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "user"
+              },
+              {
+                "kind": "account",
+                "path": "token_program"
+              },
+              {
+                "kind": "account",
+                "path": "outcome_yes_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
         },
         {
           "name": "user_outcome_no",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "user"
+              },
+              {
+                "kind": "account",
+                "path": "token_program"
+              },
+              {
+                "kind": "account",
+                "path": "outcome_no_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
         },
         {
           "name": "yes_escrow",
@@ -667,8 +1155,11 @@
           "address": "11111111111111111111111111111111"
         },
         {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "token_program"
         }
       ],
       "args": [
@@ -765,65 +1256,26 @@
           "writable": true
         },
         {
-          "name": "user_stats_account",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  117,
-                  115,
-                  101,
-                  114,
-                  95,
-                  115,
-                  116,
-                  97,
-                  116,
-                  115
-                ]
-              },
-              {
-                "kind": "arg",
-                "path": "market_id"
-              },
-              {
-                "kind": "account",
-                "path": "user"
-              }
-            ]
-          }
-        },
-        {
           "name": "user_outcome_no",
           "writable": true
         },
         {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "name": "token_program"
         }
       ],
       "args": [
         {
-          "name": "_market_id",
+          "name": "market_id",
           "type": "u32"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
         }
       ]
     },
     {
       "name": "place_order",
-      "docs": [
-        "Place an order to buy or sell outcome tokens",
-        "",
-        "Flow:",
-        "- On placing Order",
-        "- SELL order: Seller's YES/NO tokens locked in escrow immediately",
-        "- BUY order: Buyer's collateral locked in vault immediately",
-        "- When matched:",
-        "- Buyer's & Sellers claimable amount will be incremented in their UserStats Account (user can claim later from dashboard)",
-        "- Person whose order is on the orderbook first can withdraw collateral from vault separately"
-      ],
       "discriminator": [
         51,
         194,
@@ -932,11 +1384,13 @@
         },
         {
           "name": "user_outcome_yes",
-          "writable": true
+          "writable": true,
+          "optional": true
         },
         {
           "name": "user_outcome_no",
-          "writable": true
+          "writable": true,
+          "optional": true
         },
         {
           "name": "yes_escrow",
@@ -947,12 +1401,15 @@
           "writable": true
         },
         {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
         },
         {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "name": "token_program"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
@@ -991,22 +1448,25 @@
       ]
     },
     {
-      "name": "set_winning_side",
+      "name": "set_winner",
       "discriminator": [
-        228,
-        154,
-        61,
-        145,
-        237,
-        24,
-        26,
-        15
+        207,
+        149,
+        39,
+        13,
+        31,
+        233,
+        182,
+        109
       ],
       "accounts": [
         {
           "name": "authority",
           "writable": true,
-          "signer": true
+          "signer": true,
+          "relations": [
+            "market"
+          ]
         },
         {
           "name": "market",
@@ -1041,13 +1501,16 @@
           "writable": true
         },
         {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "token_program"
         }
       ],
       "args": [
         {
-          "name": "_market_id",
+          "name": "market_id",
           "type": "u32"
         },
         {
@@ -1120,11 +1583,117 @@
         },
         {
           "name": "user_outcome_yes",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "user"
+              },
+              {
+                "kind": "account",
+                "path": "token_program"
+              },
+              {
+                "kind": "account",
+                "path": "outcome_yes_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
         },
         {
           "name": "user_outcome_no",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "user"
+              },
+              {
+                "kind": "account",
+                "path": "token_program"
+              },
+              {
+                "kind": "account",
+                "path": "outcome_no_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
         },
         {
           "name": "user_stats_account",
@@ -1162,8 +1731,11 @@
           "address": "11111111111111111111111111111111"
         },
         {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "token_program"
         }
       ],
       "args": [
@@ -1179,10 +1751,6 @@
     },
     {
       "name": "update_metadata",
-      "docs": [
-        "Update the metadata URL for the market",
-        "Only the market authority can update the metadata"
-      ],
       "discriminator": [
         170,
         182,
@@ -1226,7 +1794,7 @@
       ],
       "args": [
         {
-          "name": "_market_id",
+          "name": "market_id",
           "type": "u32"
         },
         {
@@ -1278,6 +1846,19 @@
     }
   ],
   "events": [
+    {
+      "name": "FundsClaimed",
+      "discriminator": [
+        202,
+        115,
+        101,
+        227,
+        91,
+        111,
+        239,
+        217
+      ]
+    },
     {
       "name": "MarketClosed",
       "discriminator": [
@@ -1536,9 +2117,71 @@
       "code": 6022,
       "name": "OrderBookFull",
       "msg": "OrderBook is full, cannot add more orders to this side"
+    },
+    {
+      "code": 6023,
+      "name": "NothingToClaim",
+      "msg": "No claimable funds available"
+    },
+    {
+      "code": 6024,
+      "name": "OutcomeAccountRequired",
+      "msg": "Outcome token account must be provided for SELL orders"
+    },
+    {
+      "code": 6025,
+      "name": "InvalidAccountOwner",
+      "msg": "Outcome token account owner does not match the signer"
+    },
+    {
+      "code": 6026,
+      "name": "InvalidMint",
+      "msg": "Outcome token account mint does not match the market's outcome mint"
+    },
+    {
+      "code": 6027,
+      "name": "SettlementDeadlineNotReached",
+      "msg": "Settlement deadline has not been reached yet; market is still live"
+    },
+    {
+      "code": 6028,
+      "name": "NoWinnersInDraw",
+      "msg": "Market result is a draw; no winners to claim rewards"
     }
   ],
   "types": [
+    {
+      "name": "FundsClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market_id",
+            "type": "u32"
+          },
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "collateral_amount",
+            "type": "u64"
+          },
+          {
+            "name": "yes_amount",
+            "type": "u64"
+          },
+          {
+            "name": "no_amount",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
     {
       "name": "Market",
       "type": {
@@ -1657,6 +2300,14 @@
           {
             "name": "outcome_no_mint",
             "type": "pubkey"
+          },
+          {
+            "name": "meta_data_url",
+            "type": "string"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
           }
         ]
       }
@@ -1895,12 +2546,16 @@
             "type": "u32"
           },
           {
-            "name": "taker_order_id",
+            "name": "maker_order_id",
             "type": "u64"
           },
           {
-            "name": "maker_order_id",
-            "type": "u64"
+            "name": "taker_side",
+            "type": {
+              "defined": {
+                "name": "OrderSide"
+              }
+            }
           },
           {
             "name": "taker",
