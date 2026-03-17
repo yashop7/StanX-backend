@@ -1,7 +1,6 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, postgres::PgPoolOptions};
-use std::env;
 
 pub mod models;
 
@@ -10,9 +9,7 @@ pub struct Db {
 }
 
 impl Db {
-    pub async fn new() -> Result<Self> {
-        let db_url = env::var("DATABASE_URL")?;
-
+    pub async fn new(db_url : &str) -> Result<Self> {
         let pool = PgPoolOptions::new()
             .max_connections(5)
             .connect(&db_url)

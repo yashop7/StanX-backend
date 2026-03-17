@@ -1,25 +1,8 @@
 use anchor_lang::prelude::*;
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq)]
-pub enum OrderSide {
-    Buy,
-    Sell,
-}
+use crate::state::*;
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TokenType {
-    Yes,
-    No,
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq)]
-pub enum WinningOutcome {
-    OutcomeA,
-    OutcomeB,
-    Neither,
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Debug)]
+#[event]
 pub struct MarketInitialized {
     pub market_id: u32,
     pub authority: Pubkey,
@@ -31,7 +14,7 @@ pub struct MarketInitialized {
     pub timestamp: i64,
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Debug)]
+#[event]
 pub struct TokensSplit {
     pub market_id: u32,
     pub user: Pubkey,
@@ -39,7 +22,7 @@ pub struct TokensSplit {
     pub timestamp: i64,
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Debug)]
+#[event]
 pub struct TokensMerged {
     pub market_id: u32,
     pub user: Pubkey,
@@ -47,7 +30,7 @@ pub struct TokensMerged {
     pub timestamp: i64,
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Debug)]
+#[event]
 pub struct OrderPlaced {
     pub market_id: u32,
     pub order_id: u64,
@@ -58,8 +41,7 @@ pub struct OrderPlaced {
     pub quantity: u64,
     pub timestamp: i64,
 }
-
-#[derive(AnchorSerialize, AnchorDeserialize, Debug)]
+#[event]
 pub struct RewardsClaimed {
     pub market_id: u32,
     pub user: Pubkey,
@@ -69,7 +51,7 @@ pub struct RewardsClaimed {
     pub timestamp: i64,
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Debug)]
+#[event]
 pub struct MarketOrderExecuted {
     pub market_id: u32,
     pub user: Pubkey,
@@ -80,7 +62,7 @@ pub struct MarketOrderExecuted {
     pub timestamp: i64,
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Debug)]
+#[event]
 pub struct OrderCancelled {
     pub market_id: u32,
     pub order_id: u64,
@@ -91,7 +73,7 @@ pub struct OrderCancelled {
     pub timestamp: i64,
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Debug)]
+#[event]
 pub struct FundsClaimed {
     pub market_id: u32,
     pub user: Pubkey,
@@ -101,7 +83,7 @@ pub struct FundsClaimed {
     pub timestamp: i64,
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Debug)]
+#[event]
 pub struct MetadataUpdated {
     pub market_id: u32,
     pub authority: Pubkey,
@@ -109,14 +91,14 @@ pub struct MetadataUpdated {
     pub timestamp: i64,
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Debug)]
+#[event]
 pub struct MarketClosed {
     pub market_id: u32,
     pub authority: Pubkey,
     pub timestamp: i64,
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Debug)]
+#[event]
 pub struct WinningSideSet {
     pub market_id: u32,
     pub winning_outcome: WinningOutcome,
@@ -124,7 +106,7 @@ pub struct WinningSideSet {
     pub timestamp: i64,
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Debug)]
+#[event]
 pub struct OrderMatched {
     pub market_id: u32,
     pub maker_order_id: u64,

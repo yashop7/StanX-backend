@@ -18,10 +18,11 @@ pub async fn ws_handler(
     room_manager: web::Data<Mutex<RoomManager>>,
 ) -> Result<actix_web::HttpResponse, actix_web::error::Error> {
     let (tx, mut rx) = mpsc::channel::<String>(32);
-    let (response, mut session, mut msg_stream) = actix_ws::handle(&req, body)?;
+    let (response,  session, mut msg_stream) = actix_ws::handle(&req, body)?;
     let user_session = Arc::new(Mutex::new(session));
     let session_clone = user_session.clone();
     let id = ProcessUniqueId::new();
+
     if let Ok(mut manager) = room_manager.lock() {
         manager.clients.insert(id, User { tx , subscriptions : HashSet::new() });
     }

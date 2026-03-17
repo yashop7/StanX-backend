@@ -4,20 +4,20 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-tokio = { workspace = true }
-solana-client = "2.1.7"
-solana-sdk = "2.1.7"
-solana-transaction-status = "2.1.7"
-solana-program = "2.1.7"
-solana-pubkey = "2.1.7"
-borsh = "1.5.3"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-anyhow = "1.0"
-log = "0.4"
-env_logger = "0.11"
-base64 = "0.22"
-
-# Local dependencies
-db = { path = "../db" }
-common = { path = "../common" }
+tokio                     = { workspace = true }
+solana-client             = { workspace = true }
+solana-sdk                = { workspace = true }
+solana-transaction-status = { workspace = true }
+solana-program            = { workspace = true }
+solana-pubkey             = { workspace = true }
+anchor-lang               = { workspace = true }
+serde                     = { workspace = true }
+serde_json                = { workspace = true }
+anyhow                    = { workspace = true }
+log                       = { workspace = true }
+env_logger                = { workspace = true }
+base64                    = { workspace = true }
+futures-util              = { workspace = true }
+db                        = { workspace = true }
+common                    = { workspace = true }
+dotenvy                   = { workspace = true }

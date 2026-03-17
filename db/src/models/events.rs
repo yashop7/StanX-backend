@@ -4,166 +4,115 @@ use sqlx::FromRow;
 
 use crate::Db;
 
-// ============================================================================
-// Database Models for Blockchain Events
-// ============================================================================
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, sqlx::Type, PartialEq, Eq)]
+#[sqlx(type_name = "order_side", rename_all = "PascalCase")]
+pub enum OrderSide {
+    Buy,
+    Sell,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, sqlx::Type, PartialEq, Eq)]
+#[sqlx(type_name = "token_type", rename_all = "PascalCase")]
+pub enum TokenType {
+    Yes,
+    No,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, sqlx::Type, PartialEq, Eq)]
+#[sqlx(type_name = "winning_outcome")]
+pub enum WinningOutcome {
+    OutcomeA,
+    OutcomeB,
+    Neither,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, sqlx::Type, PartialEq, Eq)]
+#[sqlx(type_name = "order_status", rename_all = "snake_case")]
+pub enum OrderStatus {
+    Open,
+    PartiallyFilled,
+    Filled,
+    Cancelled,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, sqlx::Type, PartialEq, Eq)]
+#[sqlx(type_name = "market_status", rename_all = "snake_case")]
+pub enum MarketStatus {
+    Active,
+    Settled,
+    Closed,
+}
+
+// =============================================================================
+// Materialized state models
+// =============================================================================
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
-pub struct DbMarketInitialized {
-    pub id: i32,
-    pub signature: String,
-    pub slot: i64,
+pub struct Market {
     pub market_id: i32,
     pub authority: String,
     pub settlement_deadline: i64,
     pub collateral_mint: String,
     pub outcome_yes_mint: String,
     pub outcome_no_mint: String,
+    pub meta_data_url: String,
+    pub status: MarketStatus,
+    pub winning_outcome: Option<WinningOutcome>,
     pub created_at: chrono::DateTime<chrono::Utc>,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
-pub struct DbOrderPlaced {
-    pub id: i32,
-    pub signature: String,
-    pub slot: i64,
-    pub market_id: i32,
+pub struct LiveOrder {
     pub order_id: i64,
-    pub user: String,
-    pub side: String, // "Buy" or "Sell"
-    pub token_type: String, // "Yes" or "No"
+    pub market_id: i32,
+    pub user_pubkey: String,
+    pub side: OrderSide,
+    pub token_type: TokenType,
     pub price: i64,
-    pub quantity: i64,
-    pub timestamp: i64,
-    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub original_quantity: i64,
+    pub remaining_quantity: i64,
+    pub status: OrderStatus,
+    pub placed_at: i64,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
-pub struct DbOrderMatched {
+pub struct Trade {
     pub id: i32,
     pub signature: String,
-    pub slot: i64,
     pub market_id: i32,
-    pub taker_order_id: i64,
     pub maker_order_id: i64,
+    pub taker_side: OrderSide,
     pub taker: String,
     pub maker: String,
-    pub token_type: String, // "Yes" or "No"
+    pub token_type: TokenType,
     pub price: i64,
     pub quantity: i64,
-    pub timestamp: i64,
+    pub event_timestamp: i64,
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
-#[derive(Debug, Serialize, Deserialize, FromRow)]
-pub struct DbOrderCancelled {
-    pub id: i32,
-    pub signature: String,
-    pub slot: i64,
+// =============================================================================
+// Orderbook response shape — what the API returns
+// =============================================================================
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct OrderbookResponse {
     pub market_id: i32,
-    pub order_id: i64,
-    pub user: String,
-    pub side: String, // "Buy" or "Sell"
-    pub token_type: String, // "Yes" or "No"
-    pub remaining_quantity: i64,
-    pub timestamp: i64,
-    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub yes_buy_orders: Vec<LiveOrder>,
+    pub yes_sell_orders: Vec<LiveOrder>,
+    pub no_buy_orders: Vec<LiveOrder>,
+    pub no_sell_orders: Vec<LiveOrder>,
 }
 
-#[derive(Debug, Serialize, Deserialize, FromRow)]
-pub struct DbMarketOrderExecuted {
-    pub id: i32,
-    pub signature: String,
-    pub slot: i64,
-    pub market_id: i32,
-    pub user: String,
-    pub side: String, // "Buy" or "Sell"
-    pub token_type: String, // "Yes" or "No"
-    pub total_quantity: i64,
-    pub orders_matched: i64,
-    pub timestamp: i64,
-    pub created_at: chrono::DateTime<chrono::Utc>,
-}
-
-#[derive(Debug, Serialize, Deserialize, FromRow)]
-pub struct DbTokensSplit {
-    pub id: i32,
-    pub signature: String,
-    pub slot: i64,
-    pub market_id: i32,
-    pub user: String,
-    pub amount: i64,
-    pub timestamp: i64,
-    pub created_at: chrono::DateTime<chrono::Utc>,
-}
-
-#[derive(Debug, Serialize, Deserialize, FromRow)]
-pub struct DbTokensMerged {
-    pub id: i32,
-    pub signature: String,
-    pub slot: i64,
-    pub market_id: i32,
-    pub user: String,
-    pub amount: i64,
-    pub timestamp: i64,
-    pub created_at: chrono::DateTime<chrono::Utc>,
-}
-
-#[derive(Debug, Serialize, Deserialize, FromRow)]
-pub struct DbWinningSideSet {
-    pub id: i32,
-    pub signature: String,
-    pub slot: i64,
-    pub market_id: i32,
-    pub winning_outcome: String, // "OutcomeA", "OutcomeB", or "Neither"
-    pub authority: String,
-    pub timestamp: i64,
-    pub created_at: chrono::DateTime<chrono::Utc>,
-}
-
-#[derive(Debug, Serialize, Deserialize, FromRow)]
-pub struct DbRewardsClaimed {
-    pub id: i32,
-    pub signature: String,
-    pub slot: i64,
-    pub market_id: i32,
-    pub user: String,
-    pub collateral_amount: i64,
-    pub yes_tokens_burned: i64,
-    pub no_tokens_burned: i64,
-    pub timestamp: i64,
-    pub created_at: chrono::DateTime<chrono::Utc>,
-}
-
-#[derive(Debug, Serialize, Deserialize, FromRow)]
-pub struct DbMarketClosed {
-    pub id: i32,
-    pub signature: String,
-    pub slot: i64,
-    pub market_id: i32,
-    pub authority: String,
-    pub timestamp: i64,
-    pub created_at: chrono::DateTime<chrono::Utc>,
-}
-
-#[derive(Debug, Serialize, Deserialize, FromRow)]
-pub struct DbMetadataUpdated {
-    pub id: i32,
-    pub signature: String,
-    pub slot: i64,
-    pub market_id: i32,
-    pub authority: String,
-    pub new_metadata_url: String,
-    pub timestamp: i64,
-    pub created_at: chrono::DateTime<chrono::Utc>,
-}
-
-// ============================================================================
-// Database Functions for Storing Events
-// ============================================================================
+// =============================================================================
+// Database write operations — called by event-listener
+// =============================================================================
 
 impl Db {
-    /// Store a MarketInitialized event
+    // ── Market lifecycle ─────────────────────────────────────────────────
+
     pub async fn store_market_initialized(
         &self,
         signature: &str,
@@ -174,348 +123,125 @@ impl Db {
         collateral_mint: &str,
         outcome_yes_mint: &str,
         outcome_no_mint: &str,
-    ) -> Result<i32> {
-        let rec = sqlx::query!(
-            r#"
-            INSERT INTO market_initialized 
-            (signature, slot, market_id, authority, settlement_deadline, 
-             collateral_mint, outcome_yes_mint, outcome_no_mint)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            ON CONFLICT (signature) DO NOTHING
-            RETURNING id
-            "#,
-            signature,
-            slot as i64,
-            market_id,
-            authority,
-            settlement_deadline,
-            collateral_mint,
-            outcome_yes_mint,
-            outcome_no_mint
+        meta_data_url: &str,
+        event_timestamp: i64,
+    ) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
+
+        sqlx::query(
+            r#"INSERT INTO event_market_initialized
+               (signature, slot, market_id, authority, settlement_deadline,
+                collateral_mint, outcome_yes_mint, outcome_no_mint, meta_data_url, event_timestamp)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+               ON CONFLICT (signature, market_id) DO NOTHING"#,
         )
-        .fetch_optional(&self.pool)
+        .bind(signature)
+        .bind(slot)
+        .bind(market_id)
+        .bind(authority)
+        .bind(settlement_deadline)
+        .bind(collateral_mint)
+        .bind(outcome_yes_mint)
+        .bind(outcome_no_mint)
+        .bind(meta_data_url)
+        .bind(event_timestamp)
+        .execute(&mut *tx)
         .await?;
-        
-        Ok(rec.map(|r| r.id).unwrap_or(-1))
+
+        sqlx::query(
+            r#"INSERT INTO markets
+               (market_id, authority, settlement_deadline, collateral_mint,
+                outcome_yes_mint, outcome_no_mint, meta_data_url)
+               VALUES ($1,$2,$3,$4,$5,$6,$7)
+               ON CONFLICT (market_id) DO NOTHING"#,
+        )
+        .bind(market_id)
+        .bind(authority)
+        .bind(settlement_deadline)
+        .bind(collateral_mint)
+        .bind(outcome_yes_mint)
+        .bind(outcome_no_mint)
+        .bind(meta_data_url)
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+        Ok(())
     }
 
-    /// Store an OrderPlaced event
-    pub async fn store_order_placed(
-        &self,
-        signature: &str,
-        slot: i64,
-        market_id: i32,
-        order_id: i64,
-        user: &str,
-        side: &str,
-        token_type: &str,
-        price: i64,
-        quantity: i64,
-        timestamp: i64,
-    ) -> Result<i32> {
-        let rec = sqlx::query!(
-            r#"
-            INSERT INTO order_placed 
-            (signature, slot, market_id, order_id, user, side, token_type, 
-             price, quantity, timestamp)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-            ON CONFLICT (signature, order_id) DO NOTHING
-            RETURNING id
-            "#,
-            signature,
-            slot,
-            market_id,
-            order_id,
-            user,
-            side,
-            token_type,
-            price,
-            quantity,
-            timestamp
-        )
-        .fetch_optional(&self.pool)
-        .await?;
-        
-        Ok(rec.map(|r| r.id).unwrap_or(-1))
-    }
-
-    /// Store an OrderMatched event
-    pub async fn store_order_matched(
-        &self,
-        signature: &str,
-        slot: i64,
-        market_id: i32,
-        taker_order_id: i64,
-        maker_order_id: i64,
-        taker: &str,
-        maker: &str,
-        token_type: &str,
-        price: i64,
-        quantity: i64,
-        timestamp: i64,
-    ) -> Result<i32> {
-        let rec = sqlx::query!(
-            r#"
-            INSERT INTO order_matched 
-            (signature, slot, market_id, taker_order_id, maker_order_id, 
-             taker, maker, token_type, price, quantity, timestamp)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-            ON CONFLICT (signature, taker_order_id, maker_order_id) DO NOTHING
-            RETURNING id
-            "#,
-            signature,
-            slot,
-            market_id,
-            taker_order_id,
-            maker_order_id,
-            taker,
-            maker,
-            token_type,
-            price,
-            quantity,
-            timestamp
-        )
-        .fetch_optional(&self.pool)
-        .await?;
-        
-        Ok(rec.map(|r| r.id).unwrap_or(-1))
-    }
-
-    /// Store an OrderCancelled event
-    pub async fn store_order_cancelled(
-        &self,
-        signature: &str,
-        slot: i64,
-        market_id: i32,
-        order_id: i64,
-        user: &str,
-        side: &str,
-        token_type: &str,
-        remaining_quantity: i64,
-        timestamp: i64,
-    ) -> Result<i32> {
-        let rec = sqlx::query!(
-            r#"
-            INSERT INTO order_cancelled 
-            (signature, slot, market_id, order_id, user, side, token_type, 
-             remaining_quantity, timestamp)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            ON CONFLICT (signature, order_id) DO NOTHING
-            RETURNING id
-            "#,
-            signature,
-            slot,
-            market_id,
-            order_id,
-            user,
-            side,
-            token_type,
-            remaining_quantity,
-            timestamp
-        )
-        .fetch_optional(&self.pool)
-        .await?;
-        
-        Ok(rec.map(|r| r.id).unwrap_or(-1))
-    }
-
-    /// Store a MarketOrderExecuted event
-    pub async fn store_market_order_executed(
-        &self,
-        signature: &str,
-        slot: i64,
-        market_id: i32,
-        user: &str,
-        side: &str,
-        token_type: &str,
-        total_quantity: i64,
-        orders_matched: i64,
-        timestamp: i64,
-    ) -> Result<i32> {
-        let rec = sqlx::query!(
-            r#"
-            INSERT INTO market_order_executed 
-            (signature, slot, market_id, user, side, token_type, 
-             total_quantity, orders_matched, timestamp)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            ON CONFLICT (signature) DO NOTHING
-            RETURNING id
-            "#,
-            signature,
-            slot,
-            market_id,
-            user,
-            side,
-            token_type,
-            total_quantity,
-            orders_matched,
-            timestamp
-        )
-        .fetch_optional(&self.pool)
-        .await?;
-        
-        Ok(rec.map(|r| r.id).unwrap_or(-1))
-    }
-
-    /// Store a TokensSplit event
-    pub async fn store_tokens_split(
-        &self,
-        signature: &str,
-        slot: i64,
-        market_id: i32,
-        user: &str,
-        amount: i64,
-        timestamp: i64,
-    ) -> Result<i32> {
-        let rec = sqlx::query!(
-            r#"
-            INSERT INTO tokens_split 
-            (signature, slot, market_id, user, amount, timestamp)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            ON CONFLICT (signature) DO NOTHING
-            RETURNING id
-            "#,
-            signature,
-            slot,
-            market_id,
-            user,
-            amount,
-            timestamp
-        )
-        .fetch_optional(&self.pool)
-        .await?;
-        
-        Ok(rec.map(|r| r.id).unwrap_or(-1))
-    }
-
-    /// Store a TokensMerged event
-    pub async fn store_tokens_merged(
-        &self,
-        signature: &str,
-        slot: i64,
-        market_id: i32,
-        user: &str,
-        amount: i64,
-        timestamp: i64,
-    ) -> Result<i32> {
-        let rec = sqlx::query!(
-            r#"
-            INSERT INTO tokens_merged 
-            (signature, slot, market_id, user, amount, timestamp)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            ON CONFLICT (signature) DO NOTHING
-            RETURNING id
-            "#,
-            signature,
-            slot,
-            market_id,
-            user,
-            amount,
-            timestamp
-        )
-        .fetch_optional(&self.pool)
-        .await?;
-        
-        Ok(rec.map(|r| r.id).unwrap_or(-1))
-    }
-
-    /// Store a WinningSideSet event
-    pub async fn store_winning_side_set(
-        &self,
-        signature: &str,
-        slot: i64,
-        market_id: i32,
-        winning_outcome: &str,
-        authority: &str,
-        timestamp: i64,
-    ) -> Result<i32> {
-        let rec = sqlx::query!(
-            r#"
-            INSERT INTO winning_side_set 
-            (signature, slot, market_id, winning_outcome, authority, timestamp)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            ON CONFLICT (signature) DO NOTHING
-            RETURNING id
-            "#,
-            signature,
-            slot,
-            market_id,
-            winning_outcome,
-            authority,
-            timestamp
-        )
-        .fetch_optional(&self.pool)
-        .await?;
-        
-        Ok(rec.map(|r| r.id).unwrap_or(-1))
-    }
-
-    /// Store a RewardsClaimed event
-    pub async fn store_rewards_claimed(
-        &self,
-        signature: &str,
-        slot: i64,
-        market_id: i32,
-        user: &str,
-        collateral_amount: i64,
-        yes_tokens_burned: i64,
-        no_tokens_burned: i64,
-        timestamp: i64,
-    ) -> Result<i32> {
-        let rec = sqlx::query!(
-            r#"
-            INSERT INTO rewards_claimed 
-            (signature, slot, market_id, user, collateral_amount, 
-             yes_tokens_burned, no_tokens_burned, timestamp)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            ON CONFLICT (signature) DO NOTHING
-            RETURNING id
-            "#,
-            signature,
-            slot,
-            market_id,
-            user,
-            collateral_amount,
-            yes_tokens_burned,
-            no_tokens_burned,
-            timestamp
-        )
-        .fetch_optional(&self.pool)
-        .await?;
-        
-        Ok(rec.map(|r| r.id).unwrap_or(-1))
-    }
-
-    /// Store a MarketClosed event
     pub async fn store_market_closed(
         &self,
         signature: &str,
         slot: i64,
         market_id: i32,
         authority: &str,
-        timestamp: i64,
-    ) -> Result<i32> {
-        let rec = sqlx::query!(
-            r#"
-            INSERT INTO market_closed 
-            (signature, slot, market_id, authority, timestamp)
-            VALUES ($1, $2, $3, $4, $5)
-            ON CONFLICT (signature) DO NOTHING
-            RETURNING id
-            "#,
-            signature,
-            slot,
-            market_id,
-            authority,
-            timestamp
+        event_timestamp: i64,
+    ) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
+
+        sqlx::query(
+            r#"INSERT INTO event_market_closed
+               (signature, slot, market_id, authority, event_timestamp)
+               VALUES ($1,$2,$3,$4,$5)
+               ON CONFLICT (signature, market_id) DO NOTHING"#,
         )
-        .fetch_optional(&self.pool)
+        .bind(signature)
+        .bind(slot)
+        .bind(market_id)
+        .bind(authority)
+        .bind(event_timestamp)
+        .execute(&mut *tx)
         .await?;
-        
-        Ok(rec.map(|r| r.id).unwrap_or(-1))
+
+        sqlx::query(
+            "UPDATE markets SET status = 'closed', updated_at = NOW() WHERE market_id = $1",
+        )
+        .bind(market_id)
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+        Ok(())
     }
 
-    /// Store a MetadataUpdated event
+    pub async fn store_winning_side_set(
+        &self,
+        signature: &str,
+        slot: i64,
+        market_id: i32,
+        winning_outcome: WinningOutcome,
+        authority: &str,
+        event_timestamp: i64,
+    ) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
+
+        sqlx::query(
+            r#"INSERT INTO event_winning_side_set
+               (signature, slot, market_id, winning_outcome, authority, event_timestamp)
+               VALUES ($1,$2,$3,$4,$5,$6)
+               ON CONFLICT (signature, market_id) DO NOTHING"#,
+        )
+        .bind(signature)
+        .bind(slot)
+        .bind(market_id)
+        .bind(winning_outcome)
+        .bind(authority)
+        .bind(event_timestamp)
+        .execute(&mut *tx)
+        .await?;
+
+        sqlx::query(
+            "UPDATE markets SET status = 'settled', winning_outcome = $2, updated_at = NOW() WHERE market_id = $1",
+        )
+        .bind(market_id)
+        .bind(winning_outcome)
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+        Ok(())
+    }
+
     pub async fn store_metadata_updated(
         &self,
         signature: &str,
@@ -523,97 +249,514 @@ impl Db {
         market_id: i32,
         authority: &str,
         new_metadata_url: &str,
-        timestamp: i64,
-    ) -> Result<i32> {
-        let rec = sqlx::query!(
-            r#"
-            INSERT INTO metadata_updated 
-            (signature, slot, market_id, authority, new_metadata_url, timestamp)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            ON CONFLICT (signature) DO NOTHING
-            RETURNING id
-            "#,
-            signature,
-            slot,
+        event_timestamp: i64,
+    ) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
+
+        sqlx::query(
+            r#"INSERT INTO event_metadata_updated
+               (signature, slot, market_id, authority, new_metadata_url, event_timestamp)
+               VALUES ($1,$2,$3,$4,$5,$6)
+               ON CONFLICT (signature, market_id) DO NOTHING"#,
+        )
+        .bind(signature)
+        .bind(slot)
+        .bind(market_id)
+        .bind(authority)
+        .bind(new_metadata_url)
+        .bind(event_timestamp)
+        .execute(&mut *tx)
+        .await?;
+
+        sqlx::query(
+            "UPDATE markets SET meta_data_url = $2, updated_at = NOW() WHERE market_id = $1",
+        )
+        .bind(market_id)
+        .bind(new_metadata_url)
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+        Ok(())
+    }
+
+    // ── Order events ─────────────────────────────────────────────────────
+
+    pub async fn store_order_placed(
+        &self,
+        signature: &str,
+        slot: i64,
+        market_id: i32,
+        order_id: i64,
+        user_pubkey: &str,
+        side: OrderSide,
+        token_type: TokenType,
+        price: i64,
+        quantity: i64,
+        event_timestamp: i64,
+    ) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
+
+        sqlx::query(
+            r#"INSERT INTO event_order_placed
+               (signature, slot, market_id, order_id, user_pubkey, side, token_type, price, quantity, event_timestamp)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+               ON CONFLICT (signature, order_id) DO NOTHING"#,
+        )
+        .bind(signature)
+        .bind(slot)
+        .bind(market_id)
+        .bind(order_id)
+        .bind(user_pubkey)
+        .bind(side)
+        .bind(token_type)
+        .bind(price)
+        .bind(quantity)
+        .bind(event_timestamp)
+        .execute(&mut *tx)
+        .await?;
+
+        // Insert into live_orders (materialized orderbook)
+        sqlx::query(
+            r#"INSERT INTO live_orders
+               (order_id, market_id, user_pubkey, side, token_type, price,
+                original_quantity, remaining_quantity, status, placed_at)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$7,'open',$8)
+               ON CONFLICT (market_id, order_id) DO NOTHING"#,
+        )
+        .bind(order_id)
+        .bind(market_id)
+        .bind(user_pubkey)
+        .bind(side)
+        .bind(token_type)
+        .bind(price)
+        .bind(quantity)
+        .bind(event_timestamp)
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+        Ok(())
+    }
+
+    pub async fn store_order_matched(
+        &self,
+        signature: &str,
+        slot: i64,
+        market_id: i32,
+        maker_order_id: i64,
+        taker_side: OrderSide,
+        taker: &str,
+        maker: &str,
+        token_type: TokenType,
+        price: i64,
+        quantity: i64,
+        event_timestamp: i64,
+    ) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
+
+        // 1. Event log
+        sqlx::query(
+            r#"INSERT INTO event_order_matched
+               (signature, slot, market_id, maker_order_id, taker_side, taker, maker,
+                token_type, price, quantity, event_timestamp)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+               ON CONFLICT (signature, maker_order_id) DO NOTHING"#,
+        )
+        .bind(signature)
+        .bind(slot)
+        .bind(market_id)
+        .bind(maker_order_id)
+        .bind(taker_side)
+        .bind(taker)
+        .bind(maker)
+        .bind(token_type)
+        .bind(price)
+        .bind(quantity)
+        .bind(event_timestamp)
+        .execute(&mut *tx)
+        .await?;
+
+        // 2. Trade history
+        sqlx::query(
+            r#"INSERT INTO trades
+               (signature, market_id, maker_order_id, taker_side, taker, maker,
+                token_type, price, quantity, event_timestamp)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)"#,
+        )
+        .bind(signature)
+        .bind(market_id)
+        .bind(maker_order_id)
+        .bind(taker_side)
+        .bind(taker)
+        .bind(maker)
+        .bind(token_type)
+        .bind(price)
+        .bind(quantity)
+        .bind(event_timestamp)
+        .execute(&mut *tx)
+        .await?;
+
+        // 3. Update maker's live order — reduce remaining quantity
+        sqlx::query(
+            r#"UPDATE live_orders
+               SET remaining_quantity = remaining_quantity - $3,
+                   status = CASE
+                       WHEN remaining_quantity - $3 <= 0 THEN 'filled'::order_status
+                       ELSE 'partially_filled'::order_status
+                   END,
+                   updated_at = NOW()
+               WHERE market_id = $1 AND order_id = $2"#,
+        )
+        .bind(market_id)
+        .bind(maker_order_id)
+        .bind(quantity)
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+        Ok(())
+    }
+
+    pub async fn store_order_cancelled(
+        &self,
+        signature: &str,
+        slot: i64,
+        market_id: i32,
+        order_id: i64,
+        user_pubkey: &str,
+        side: OrderSide,
+        token_type: TokenType,
+        remaining_quantity: i64,
+        event_timestamp: i64,
+    ) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
+
+        sqlx::query(
+            r#"INSERT INTO event_order_cancelled
+               (signature, slot, market_id, order_id, user_pubkey, side, token_type,
+                remaining_quantity, event_timestamp)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+               ON CONFLICT (signature, order_id) DO NOTHING"#,
+        )
+        .bind(signature)
+        .bind(slot)
+        .bind(market_id)
+        .bind(order_id)
+        .bind(user_pubkey)
+        .bind(side)
+        .bind(token_type)
+        .bind(remaining_quantity)
+        .bind(event_timestamp)
+        .execute(&mut *tx)
+        .await?;
+
+        // Mark order as cancelled in live_orders
+        sqlx::query(
+            r#"UPDATE live_orders
+               SET status = 'cancelled', updated_at = NOW()
+               WHERE market_id = $1 AND order_id = $2"#,
+        )
+        .bind(market_id)
+        .bind(order_id)
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+        Ok(())
+    }
+
+    pub async fn store_market_order_executed(
+        &self,
+        signature: &str,
+        slot: i64,
+        market_id: i32,
+        user_pubkey: &str,
+        side: OrderSide,
+        token_type: TokenType,
+        total_quantity: i64,
+        orders_matched: i64,
+        event_timestamp: i64,
+    ) -> Result<()> {
+        // Market orders are taker-only — the maker side updates happen via OrderMatched events.
+        sqlx::query(
+            r#"INSERT INTO event_market_order_executed
+               (signature, slot, market_id, user_pubkey, side, token_type,
+                total_quantity, orders_matched, event_timestamp)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+               ON CONFLICT (signature) DO NOTHING"#,
+        )
+        .bind(signature)
+        .bind(slot)
+        .bind(market_id)
+        .bind(user_pubkey)
+        .bind(side)
+        .bind(token_type)
+        .bind(total_quantity)
+        .bind(orders_matched)
+        .bind(event_timestamp)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    // ── Token events ─────────────────────────────────────────────────────
+
+    pub async fn store_tokens_split(
+        &self,
+        signature: &str,
+        slot: i64,
+        market_id: i32,
+        user_pubkey: &str,
+        amount: i64,
+        event_timestamp: i64,
+    ) -> Result<()> {
+        sqlx::query(
+            r#"INSERT INTO event_tokens_split
+               (signature, slot, market_id, user_pubkey, amount, event_timestamp)
+               VALUES ($1,$2,$3,$4,$5,$6)
+               ON CONFLICT (signature) DO NOTHING"#,
+        )
+        .bind(signature)
+        .bind(slot)
+        .bind(market_id)
+        .bind(user_pubkey)
+        .bind(amount)
+        .bind(event_timestamp)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn store_tokens_merged(
+        &self,
+        signature: &str,
+        slot: i64,
+        market_id: i32,
+        user_pubkey: &str,
+        amount: i64,
+        event_timestamp: i64,
+    ) -> Result<()> {
+        sqlx::query(
+            r#"INSERT INTO event_tokens_merged
+               (signature, slot, market_id, user_pubkey, amount, event_timestamp)
+               VALUES ($1,$2,$3,$4,$5,$6)
+               ON CONFLICT (signature) DO NOTHING"#,
+        )
+        .bind(signature)
+        .bind(slot)
+        .bind(market_id)
+        .bind(user_pubkey)
+        .bind(amount)
+        .bind(event_timestamp)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    // ── Claim events ─────────────────────────────────────────────────────
+
+    pub async fn store_rewards_claimed(
+        &self,
+        signature: &str,
+        slot: i64,
+        market_id: i32,
+        user_pubkey: &str,
+        collateral_amount: i64,
+        yes_tokens_burned: i64,
+        no_tokens_burned: i64,
+        event_timestamp: i64,
+    ) -> Result<()> {
+        sqlx::query(
+            r#"INSERT INTO event_rewards_claimed
+               (signature, slot, market_id, user_pubkey, collateral_amount,
+                yes_tokens_burned, no_tokens_burned, event_timestamp)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+               ON CONFLICT (signature) DO NOTHING"#,
+        )
+        .bind(signature)
+        .bind(slot)
+        .bind(market_id)
+        .bind(user_pubkey)
+        .bind(collateral_amount)
+        .bind(yes_tokens_burned)
+        .bind(no_tokens_burned)
+        .bind(event_timestamp)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn store_funds_claimed(
+        &self,
+        signature: &str,
+        slot: i64,
+        market_id: i32,
+        user_pubkey: &str,
+        collateral_amount: i64,
+        yes_amount: i64,
+        no_amount: i64,
+        event_timestamp: i64,
+    ) -> Result<()> {
+        sqlx::query(
+            r#"INSERT INTO event_funds_claimed
+               (signature, slot, market_id, user_pubkey, collateral_amount,
+                yes_amount, no_amount, event_timestamp)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+               ON CONFLICT (signature) DO NOTHING"#,
+        )
+        .bind(signature)
+        .bind(slot)
+        .bind(market_id)
+        .bind(user_pubkey)
+        .bind(collateral_amount)
+        .bind(yes_amount)
+        .bind(no_amount)
+        .bind(event_timestamp)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    // ── Indexer cursor ───────────────────────────────────────────────────
+
+    pub async fn update_cursor(&self, signature: &str, slot: i64) -> Result<()> {
+        sqlx::query(
+            r#"INSERT INTO indexer_cursor (id, last_signature, last_slot)
+               VALUES (1, $1, $2)
+               ON CONFLICT (id)
+               DO UPDATE SET last_signature = $1, last_slot = $2, updated_at = NOW()"#,
+        )
+        .bind(signature)
+        .bind(slot)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn get_cursor(&self) -> Result<Option<(String, i64)>> {
+        let row: Option<(String, i64)> = sqlx::query_as(
+            "SELECT last_signature, last_slot FROM indexer_cursor WHERE id = 1",
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    // =====================================================================
+    // READ QUERIES — called by the backend API
+    // =====================================================================
+
+    /// Get the full orderbook for a market (only open/partially_filled orders)
+    pub async fn get_orderbook(&self, market_id: i32) -> Result<OrderbookResponse> {
+        let orders: Vec<LiveOrder> = sqlx::query_as(
+            r#"SELECT order_id, market_id, user_pubkey, side, token_type, price,
+                      original_quantity, remaining_quantity, status, placed_at, updated_at
+               FROM live_orders
+               WHERE market_id = $1 AND status IN ('open', 'partially_filled')
+               ORDER BY price"#,
+        )
+        .bind(market_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut book = OrderbookResponse {
             market_id,
-            authority,
-            new_metadata_url,
-            timestamp
+            yes_buy_orders: Vec::new(),
+            yes_sell_orders: Vec::new(),
+            no_buy_orders: Vec::new(),
+            no_sell_orders: Vec::new(),
+        };
+
+        for order in orders {
+            match (order.token_type, order.side) {
+                (TokenType::Yes, OrderSide::Buy) => book.yes_buy_orders.push(order),
+                (TokenType::Yes, OrderSide::Sell) => book.yes_sell_orders.push(order),
+                (TokenType::No, OrderSide::Buy) => book.no_buy_orders.push(order),
+                (TokenType::No, OrderSide::Sell) => book.no_sell_orders.push(order),
+            }
+        }
+
+        // Buy orders: highest price first; Sell orders: lowest price first
+        book.yes_buy_orders.sort_by(|a, b| b.price.cmp(&a.price));
+        book.yes_sell_orders.sort_by(|a, b| a.price.cmp(&b.price));
+        book.no_buy_orders.sort_by(|a, b| b.price.cmp(&a.price));
+        book.no_sell_orders.sort_by(|a, b| a.price.cmp(&b.price));
+
+        Ok(book)
+    }
+
+    /// Get a single market by ID
+    pub async fn get_market(&self, market_id: i32) -> Result<Option<Market>> {
+        let market = sqlx::query_as(
+            "SELECT * FROM markets WHERE market_id = $1",
         )
+        .bind(market_id)
         .fetch_optional(&self.pool)
         .await?;
-        
-        Ok(rec.map(|r| r.id).unwrap_or(-1))
-    }
-
-    // ========================================================================
-    // Query Functions - Get events from database
-    // ========================================================================
-
-    /// Get all order placed events for a market
-    pub async fn get_orders_by_market(&self, market_id: i32) -> Result<Vec<DbOrderPlaced>> {
-        let orders = sqlx::query_as!(
-            DbOrderPlaced,
-            r#"
-            SELECT * FROM order_placed 
-            WHERE market_id = $1 
-            ORDER BY timestamp DESC
-            "#,
-            market_id
-        )
-        .fetch_all(&self.pool)
-        .await?;
-        
-        Ok(orders)
-    }
-
-    /// Get all order matched events for a market
-    pub async fn get_matches_by_market(&self, market_id: i32) -> Result<Vec<DbOrderMatched>> {
-        let matches = sqlx::query_as!(
-            DbOrderMatched,
-            r#"
-            SELECT * FROM order_matched 
-            WHERE market_id = $1 
-            ORDER BY timestamp DESC
-            "#,
-            market_id
-        )
-        .fetch_all(&self.pool)
-        .await?;
-        
-        Ok(matches)
-    }
-
-    /// Get all events for a specific user
-    pub async fn get_user_orders(&self, user: &str) -> Result<Vec<DbOrderPlaced>> {
-        let orders = sqlx::query_as!(
-            DbOrderPlaced,
-            r#"
-            SELECT * FROM order_placed 
-            WHERE user = $1 
-            ORDER BY timestamp DESC
-            "#,
-            user
-        )
-        .fetch_all(&self.pool)
-        .await?;
-        
-        Ok(orders)
-    }
-
-    /// Get market initialization data
-    pub async fn get_market_init(&self, market_id: i32) -> Result<Option<DbMarketInitialized>> {
-        let market = sqlx::query_as!(
-            DbMarketInitialized,
-            r#"
-            SELECT * FROM market_initialized 
-            WHERE market_id = $1
-            "#,
-            market_id
-        )
-        .fetch_optional(&self.pool)
-        .await?;
-        
         Ok(market)
+    }
+
+    /// Get all active markets
+    pub async fn get_active_markets(&self) -> Result<Vec<Market>> {
+        let markets = sqlx::query_as(
+            "SELECT * FROM markets WHERE status = 'active' ORDER BY created_at DESC",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(markets)
+    }
+
+    /// Get recent trades for a market
+    pub async fn get_trades(&self, market_id: i32, limit: i64) -> Result<Vec<Trade>> {
+        let trades = sqlx::query_as(
+            r#"SELECT * FROM trades
+               WHERE market_id = $1
+               ORDER BY event_timestamp DESC
+               LIMIT $2"#,
+        )
+        .bind(market_id)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(trades)
+    }
+
+    /// Get a user's open orders across a market
+    pub async fn get_user_orders(
+        &self,
+        user_pubkey: &str,
+        market_id: i32,
+    ) -> Result<Vec<LiveOrder>> {
+        let orders = sqlx::query_as(
+            r#"SELECT * FROM live_orders
+               WHERE user_pubkey = $1 AND market_id = $2
+               ORDER BY placed_at DESC"#,
+        )
+        .bind(user_pubkey)
+        .bind(market_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(orders)
+    }
+
+    /// Get a user's trade history
+    pub async fn get_user_trades(
+        &self,
+        user_pubkey: &str,
+        limit: i64,
+    ) -> Result<Vec<Trade>> {
+        let trades = sqlx::query_as(
+            r#"SELECT * FROM trades
+               WHERE taker = $1 OR maker = $1
+               ORDER BY event_timestamp DESC
+               LIMIT $2"#,
+        )
+        .bind(user_pubkey)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(trades)
     }
 }
