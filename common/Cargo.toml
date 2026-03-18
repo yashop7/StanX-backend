@@ -4,3 +4,19 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+tokio                     = { workspace = true }
+solana-client             = { workspace = true }
+solana-sdk                = { workspace = true }
+solana-transaction-status = { workspace = true }
+solana-program            = { workspace = true }
+solana-pubkey             = { workspace = true }
+anchor-lang               = { workspace = true }
+serde                     = { workspace = true }
+serde_json                = { workspace = true }
+anyhow                    = { workspace = true }
+log                       = { workspace = true }
+env_logger                = { workspace = true }
+base64                    = { workspace = true }
+futures-util              = { workspace = true }
+db                        = { workspace = true }
+dotenvy                   = { workspace = true }

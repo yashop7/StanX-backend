@@ -1,3 +1,4 @@
+use common::OrderbookState;
 use db::Db;
 use tokio::sync::mpsc;
 use std::{collections::HashMap, sync::{Arc, RwLock}};
@@ -26,7 +27,8 @@ pub enum MessagetoEngine {
 pub struct AppState {
     // Like here what messages to send to the market, what can be
     // Like can be Split, Merge, Market, Limit, Cancel, 
-    pub markets : Arc<RwLock<HashMap<String, mpsc::Sender<MessagetoEngine>>>>,
+    pub orderbook : Arc<RwLock<HashMap<i32, Arc<OrderbookState>>>>,
+    pub ob_channels : Arc<RwLock<HashMap<i32, mpsc::Sender<MessagetoEngine>>>>,
     pub db: Arc<Db>
 }
 
