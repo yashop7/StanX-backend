@@ -193,7 +193,8 @@ CREATE TABLE event_market_order_executed (
     user_pubkey     VARCHAR(64) NOT NULL,
     side            order_side NOT NULL,
     token_type      token_type NOT NULL,
-    total_quantity  BIGINT NOT NULL,
+    initial_quantity BIGINT NOT NULL,
+    filled_quantity  BIGINT NOT NULL,
     orders_matched  BIGINT NOT NULL,
     event_timestamp BIGINT NOT NULL,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -255,7 +256,6 @@ CREATE TABLE event_funds_claimed (
 );
 
 
--- Add migration script here
 -- Create users table
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

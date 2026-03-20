@@ -62,7 +62,7 @@ pub struct Market {
     pub updated_at: chrono::DateTime<chrono::Utc>,
 }
 
-#[derive(Debug, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct LiveOrder {
     pub order_id: i64,
     pub market_id: i32,
@@ -474,7 +474,8 @@ impl Db {
         user_pubkey: &str,
         side: OrderSide,
         token_type: TokenType,
-        total_quantity: i64,
+        initial_quantity: i64,
+        filled_quantity: i64,
         orders_matched: i64,
         event_timestamp: i64,
     ) -> Result<()> {
@@ -482,8 +483,8 @@ impl Db {
         sqlx::query(
             r#"INSERT INTO event_market_order_executed
                (signature, slot, market_id, user_pubkey, side, token_type,
-                total_quantity, orders_matched, event_timestamp)
-               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+                initial_quantity, filled_quantity, orders_matched, event_timestamp)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
                ON CONFLICT (signature) DO NOTHING"#,
         )
         .bind(signature)
@@ -492,7 +493,8 @@ impl Db {
         .bind(user_pubkey)
         .bind(side)
         .bind(token_type)
-        .bind(total_quantity)
+        .bind(initial_quantity)
+        .bind(filled_quantity)
         .bind(orders_matched)
         .bind(event_timestamp)
         .execute(&self.pool)
@@ -644,6 +646,10 @@ impl Db {
         Ok(row)
     }
 
+
+    // KEEPING THEM ON HOLD, WE WILL FETCH THEM FROM THE IN-MEMORY ORDERBOOK
+
+
     // =====================================================================
     // READ QUERIES — called by the backend API
     // =====================================================================
@@ -685,6 +691,20 @@ impl Db {
         book.no_sell_orders.sort_by(|a, b| a.price.cmp(&b.price));
 
         Ok(book)
+    }
+
+    /// Get a single live order by market + order id (used after a match to read updated remaining_quantity)
+    pub async fn get_live_order(&self, market_id: i32, order_id: i64) -> Result<Option<LiveOrder>> {
+        let order = sqlx::query_as(
+            r#"SELECT order_id, market_id, user_pubkey, side, token_type, price,
+                      original_quantity, remaining_quantity, status, placed_at, updated_at
+               FROM live_orders WHERE market_id = $1 AND order_id = $2"#,
+        )
+        .bind(market_id)
+        .bind(order_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(order)
     }
 
     /// Get a single market by ID

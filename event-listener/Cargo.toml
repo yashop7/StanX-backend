@@ -21,3 +21,6 @@ futures-util              = { workspace = true }
 db                        = { workspace = true }
 common                    = { workspace = true }
 dotenvy                   = { workspace = true }
+redis                     = { workspace = true }
+chrono                    = { workspace = true }
+env = "1.0.1"

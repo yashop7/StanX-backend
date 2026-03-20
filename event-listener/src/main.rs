@@ -32,6 +32,8 @@ async fn main() -> Result<()> {
         Pubkey::from_str(&program).map_err(|_| anyhow::anyhow!("Invalid PROGRAM_ID"))?;
     let rpc_url = env::var("SOLANA_WS_RPC_URL")
         .unwrap_or_else(|_| "wss://api.devnet.solana.com/".to_string());
+    
+
 
     let db = Db::new(&db_url).await?;
     let client = PubsubClient::new(&rpc_url).await?;

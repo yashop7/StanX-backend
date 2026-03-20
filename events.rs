@@ -57,7 +57,8 @@ pub struct MarketOrderExecuted {
     pub user: Pubkey,
     pub side: OrderSide,
     pub token_type: TokenType,
-    pub total_quantity: u64,
+    pub initial_quantity: u64,
+    pub filled_quantity: u64,
     pub orders_matched: u64,
     pub timestamp: i64,
 }

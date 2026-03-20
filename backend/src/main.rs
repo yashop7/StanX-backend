@@ -11,6 +11,8 @@ use crate::state::state::AppState;
 pub mod routes;
 pub mod middleware;
 pub mod state;
+pub mod bootstrap;
+pub mod receiver;
 
 #[tokio::main]
 async fn main() {
@@ -20,8 +22,11 @@ async fn main() {
 
     let app_state = AppState {
         db,
-        markets: Arc::new(RwLock::new(HashMap::new())),
+        orderbook: Arc::new(RwLock::new(HashMap::new())),
+        ob_channels: Arc::new(RwLock::new(HashMap::new()))
     };
+
+    bootstrap(app_state);
     
     let app = Router::new()
         .route("/signup", post(create_user))
