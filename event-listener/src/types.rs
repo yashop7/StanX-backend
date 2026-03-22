@@ -128,6 +128,7 @@ pub struct WinningSideSet {
 #[derive(AnchorSerialize, AnchorDeserialize, Debug)]
 pub struct OrderMatched {
     pub market_id: u32,
+    pub taker_order_id: u64, // 0 = market order (never on book), non-zero = limit order
     pub maker_order_id: u64,
     pub taker_side: OrderSide,
     pub taker: Pubkey,

@@ -4,14 +4,38 @@ use db::models::events::{LiveOrder, OrderbookResponse};
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
-#[derive(Serialize, Deserialize)]
+// For orderbookState
+pub trait OrderbookWrite {
+    // pushing order in orderbook
+    fn push(&mut self, token_type: TokenType, order_side: OrderSide, order: LiveOrder);
+    // Applying the diff to the current orderbook
+    fn push_snapshot(&mut self, orderbook: OrderbookResponse);
+    // removing a particular orderID from the orderbook
+    fn remove(&mut self, order_id: i64);
+}
+
+// For orderbookDiff
+pub trait ApplyDiff<S> {
+    // applying the changes to the orderbook state
+    fn apply(&self, state: &mut S);
+    // Checking if orderbookDiff is empty or not
+    fn is_empty(&self) -> bool;
+}
+
+pub trait ComputeDiff: Sized {
+    type Diff;
+    // Calculate the orderbookDiff from 2 orderbooks
+    fn diff(old: &Self, new: &Self) -> Self::Diff;
+}
+
+#[derive(Clone, Serialize, Deserialize)]
 pub struct OrderbookState {
     pub slot: u64,
     pub market_id: i32,
     pub yes_bids: Vec<LiveOrder>, // sorted price desc
     pub yes_asks: Vec<LiveOrder>, // sorted price asc
-    pub no_bids: Vec<LiveOrder>,
-    pub no_asks: Vec<LiveOrder>,
+    pub no_bids: Vec<LiveOrder>,  // sorted price desc
+    pub no_asks: Vec<LiveOrder>,  // sorted price asc
 }
 
 impl OrderbookState {
@@ -25,8 +49,10 @@ impl OrderbookState {
             no_asks: Vec::new(),
         }
     }
+}
 
-    pub fn push(&mut self, token_type: TokenType, order_side: OrderSide, order: LiveOrder) {
+impl OrderbookWrite for OrderbookState {
+    fn push(&mut self, token_type: TokenType, order_side: OrderSide, order: LiveOrder) {
         match (token_type, order_side) {
             (TokenType::Yes, OrderSide::Buy) => {
                 self.yes_bids.push(order);
@@ -51,26 +77,62 @@ impl OrderbookState {
         }
     }
 
-    pub fn push_orderbook_response(&mut self, orderbook: OrderbookResponse) {
-
+    fn push_snapshot(&mut self, orderbook: OrderbookResponse) {
         self.yes_bids = orderbook.yes_buy_orders;
-        self.yes_bids.sort_by(|a, b| b.price.partial_cmp(&a.price).unwrap()); // desc
+        self.yes_bids
+            .sort_by(|a, b| b.price.partial_cmp(&a.price).unwrap()); // desc
 
         self.yes_asks = orderbook.yes_sell_orders;
-        self.yes_asks.sort_by(|a, b| a.price.partial_cmp(&b.price).unwrap()); // asc
+        self.yes_asks
+            .sort_by(|a, b| a.price.partial_cmp(&b.price).unwrap()); // asc
 
         self.no_bids = orderbook.no_buy_orders;
-        self.no_bids.sort_by(|a, b| b.price.partial_cmp(&a.price).unwrap()); // desc
+        self.no_bids
+            .sort_by(|a, b| b.price.partial_cmp(&a.price).unwrap()); // desc
 
         self.no_asks = orderbook.no_sell_orders;
-        self.no_asks.sort_by(|a, b| a.price.partial_cmp(&b.price).unwrap()); // asc
+        self.no_asks
+            .sort_by(|a, b| a.price.partial_cmp(&b.price).unwrap()); // asc
     }
 
-    pub fn remove(&mut self, order_id: i64) {
+    fn remove(&mut self, order_id: i64) {
         self.yes_bids.retain(|o| o.order_id != order_id);
         self.yes_asks.retain(|o| o.order_id != order_id);
         self.no_bids.retain(|o| o.order_id != order_id);
         self.no_asks.retain(|o| o.order_id != order_id);
+    }
+}
+
+impl ComputeDiff for OrderbookState {
+    type Diff = OrderbookDiff;
+
+    fn diff(old: &Self, new: &Self) -> OrderbookDiff {
+        let mut diff = OrderbookDiff::new(new.slot, new.market_id);
+        diff_side(
+            &old.yes_bids,
+            &new.yes_bids,
+            &mut diff.yes_bids_added,
+            &mut diff.yes_bids_removed,
+        );
+        diff_side(
+            &old.yes_asks,
+            &new.yes_asks,
+            &mut diff.yes_asks_added,
+            &mut diff.yes_asks_removed,
+        );
+        diff_side(
+            &old.no_bids,
+            &new.no_bids,
+            &mut diff.no_bids_added,
+            &mut diff.no_bids_removed,
+        );
+        diff_side(
+            &old.no_asks,
+            &new.no_asks,
+            &mut diff.no_asks_added,
+            &mut diff.no_asks_removed,
+        );
+        diff
     }
 }
 
@@ -103,34 +165,40 @@ impl OrderbookDiff {
             no_asks_removed: Vec::new(),
         }
     }
+}
 
-    /// Compute the diff between two orderbook snapshots.
-    pub fn from_states(old: &OrderbookState, new: &OrderbookState) -> Self {
-        let mut diff = Self::new(new.slot, new.market_id);
-        diff_side(&old.yes_bids, &new.yes_bids, &mut diff.yes_bids_added, &mut diff.yes_bids_removed);
-        diff_side(&old.yes_asks, &new.yes_asks, &mut diff.yes_asks_added, &mut diff.yes_asks_removed);
-        diff_side(&old.no_bids,  &new.no_bids,  &mut diff.no_bids_added,  &mut diff.no_bids_removed);
-        diff_side(&old.no_asks,  &new.no_asks,  &mut diff.no_asks_added,  &mut diff.no_asks_removed);
-        diff
-    }
+impl ApplyDiff<OrderbookState> for OrderbookDiff {
+    fn apply(&self, state: &mut OrderbookState) {
+        for &id in &self.yes_bids_removed {
+            state.yes_bids.retain(|o| o.order_id != id);
+        }
+        for &id in &self.yes_asks_removed {
+            state.yes_asks.retain(|o| o.order_id != id);
+        }
+        for &id in &self.no_bids_removed {
+            state.no_bids.retain(|o| o.order_id != id);
+        }
+        for &id in &self.no_asks_removed {
+            state.no_asks.retain(|o| o.order_id != id);
+        }
 
-    /// Apply this diff to an existing orderbook state in place.
-    pub fn apply(&self, state: &mut OrderbookState) {
-        for &id in &self.yes_bids_removed { state.yes_bids.retain(|o| o.order_id != id); }
-        for &id in &self.yes_asks_removed { state.yes_asks.retain(|o| o.order_id != id); }
-        for &id in &self.no_bids_removed  { state.no_bids.retain(|o| o.order_id != id); }
-        for &id in &self.no_asks_removed  { state.no_asks.retain(|o| o.order_id != id); }
-
-        for order in &self.yes_bids_added { state.push(TokenType::Yes, OrderSide::Buy,  order.clone()); }
-        for order in &self.yes_asks_added { state.push(TokenType::Yes, OrderSide::Sell, order.clone()); }
-        for order in &self.no_bids_added  { state.push(TokenType::No,  OrderSide::Buy,  order.clone()); }
-        for order in &self.no_asks_added  { state.push(TokenType::No,  OrderSide::Sell, order.clone()); }
+        for order in &self.yes_bids_added {
+            state.push(TokenType::Yes, OrderSide::Buy, order.clone());
+        }
+        for order in &self.yes_asks_added {
+            state.push(TokenType::Yes, OrderSide::Sell, order.clone());
+        }
+        for order in &self.no_bids_added {
+            state.push(TokenType::No, OrderSide::Buy, order.clone());
+        }
+        for order in &self.no_asks_added {
+            state.push(TokenType::No, OrderSide::Sell, order.clone());
+        }
 
         state.slot = self.slot;
     }
 
-    /// Returns true if this diff contains no changes.
-    pub fn is_empty(&self) -> bool {
+    fn is_empty(&self) -> bool {
         self.yes_bids_added.is_empty()
             && self.yes_bids_removed.is_empty()
             && self.yes_asks_added.is_empty()
@@ -153,7 +221,9 @@ fn diff_side(
 
     for order in new {
         match old_map.get(&order.order_id) {
+            // New order not seen before → add
             None => added.push(order.clone()),
+            // Quantity changed (partial fill) → remove old, re-add updated
             Some(old_order) if old_order.remaining_quantity != order.remaining_quantity => {
                 removed.push(order.order_id);
                 added.push(order.clone());

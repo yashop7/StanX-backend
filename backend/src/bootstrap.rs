@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use common::{OrderbookDiff, OrderbookState};
+use common::{OrderbookDiff, OrderbookState, OrderbookWrite};
 use log::{error, warn, info};
 use tokio::sync::broadcast;
 
@@ -28,7 +28,7 @@ pub async fn bootstrap(state: &AppState) -> Result<()> {
 
         let mut orderbook = OrderbookState::new(0, market_id);
         if let Ok(snapshot) = db.get_orderbook(market_id).await {
-            orderbook.push_orderbook_response(snapshot);
+            orderbook.push_snapshot(snapshot);
         }
 
         if let Ok(mut guard) = state.orderbook.write() {

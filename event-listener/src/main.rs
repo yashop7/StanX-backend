@@ -1,7 +1,7 @@
 mod event_handler;
 mod types;
 
-use std::{env, str::FromStr};
+use std::{collections::HashSet, env, str::FromStr};
 
 use anyhow::Result;
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
@@ -44,6 +44,8 @@ async fn main() -> Result<()> {
 
     log::info!("Indexer listening for program {}", program_id);
 
+    let mut seen_signatures: HashSet<String> = HashSet::new();
+
     while let Some(msg) = log_stream.next().await {
 
         if msg.value.err.is_some() {
@@ -53,6 +55,18 @@ async fn main() -> Result<()> {
 
         let slot = msg.context.slot;
         let signature = &msg.value.signature;
+
+        // Skip null signature (simulated/preflight transactions)
+        if signature.chars().all(|c| c == '1') {
+            log::debug!("Skipping simulated tx sig={}", signature);
+            continue;
+        }
+
+        if seen_signatures.contains(signature) {
+            log::debug!("Skipping duplicate sig={}", signature);
+            continue;
+        }
+        seen_signatures.insert(signature.clone());
 
         for log in msg.value.logs {
             if let Some(val) = log.strip_prefix("Program data: ") {

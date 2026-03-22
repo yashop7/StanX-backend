@@ -280,7 +280,6 @@ impl Db {
         Ok(())
     }
 
-    // ── Order events ─────────────────────────────────────────────────────
 
     pub async fn store_order_placed(
         &self,
@@ -345,6 +344,7 @@ impl Db {
         slot: i64,
         market_id: i32,
         maker_order_id: i64,
+        taker_order_id: i64, // 0 = market order (no live_order to update)
         taker_side: OrderSide,
         taker: &str,
         maker: &str,
@@ -413,6 +413,26 @@ impl Db {
         .bind(quantity)
         .execute(&mut *tx)
         .await?;
+
+        // 4. Update taker's live order — only for limit orders (taker_order_id != 0)
+        // Market orders (taker_order_id == 0) never rest on the book, nothing to update.
+        if taker_order_id != 0 {
+            sqlx::query(
+                r#"UPDATE live_orders
+                   SET remaining_quantity = remaining_quantity - $3,
+                       status = CASE
+                           WHEN remaining_quantity - $3 <= 0 THEN 'filled'::order_status
+                           ELSE 'partially_filled'::order_status
+                       END,
+                       updated_at = NOW()
+                   WHERE market_id = $1 AND order_id = $2"#,
+            )
+            .bind(market_id)
+            .bind(taker_order_id)
+            .bind(quantity)
+            .execute(&mut *tx)
+            .await?;
+        }
 
         tx.commit().await?;
         Ok(())
@@ -503,7 +523,6 @@ impl Db {
         Ok(())
     }
 
-    // ── Token events ─────────────────────────────────────────────────────
 
     pub async fn store_tokens_split(
         &self,
@@ -709,6 +728,7 @@ impl Db {
 
     /// Get a single market by ID
     pub async fn get_market(&self, market_id: i32) -> Result<Option<Market>> {
+        println!("market_id: {}", market_id.clone());
         let market = sqlx::query_as(
             "SELECT * FROM markets WHERE market_id = $1",
         )
