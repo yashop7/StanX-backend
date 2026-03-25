@@ -1,8 +1,7 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 use db::models::events::{LiveOrder, OrderbookResponse};
 use serde::{Deserialize, Serialize};
-use tokio::sync::RwLock;
 
 // For orderbookState
 pub trait OrderbookWrite {

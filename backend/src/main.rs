@@ -1,4 +1,4 @@
-use axum::{Router, routing::{any, get, post}};
+use axum::{Router, routing::{ get, post}};
 use db::Db;
 use dotenvy;
 use std::{collections::HashMap, env, sync::{Arc, RwLock}};

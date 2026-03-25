@@ -570,6 +570,7 @@ impl<'info> PlaceOrder<'info> {
                 emit!(OrderMatched {
                     market_id,
                     maker_order_id,
+                    taker_order_id: order.id,
                     taker_side: order.side,
                     taker: self.user.key(),
                     maker: maker_pubkey,

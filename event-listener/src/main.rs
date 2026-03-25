@@ -75,7 +75,12 @@ async fn main() -> Result<()> {
                     if let Err(e) =
                         event_handler::handle_event(signature, slot, &data, &db).await
                     {
-                        log::error!("Event handling error sig={}: {}", signature, e);
+                        log::error!(
+                            "Event handling error sig={}: {} | raw_hex={}",
+                            signature,
+                            e,
+                            data.iter().map(|b| format!("{:02x}", b)).collect::<Vec<_>>().join(" ")
+                        );
                     }
                 }
             }

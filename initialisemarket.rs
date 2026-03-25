@@ -124,7 +124,7 @@ impl<'info> InitializeMarket<'info> {
         self.orderbook.set_inner(OrderBook {
             bump: bumps.orderbook,
             market_id,
-            next_order_id: 0,
+            next_order_id: 1,
             yes_buy_orders: Vec::new(),
             yes_sell_orders: Vec::new(),
             no_buy_orders: Vec::new(),

@@ -5,6 +5,7 @@ use common::OrderbookDiff;
 use db::models::events::{LiveOrder, OrderSide, OrderStatus, TokenType, WinningOutcome};
 use db::Db;
 use redis::Commands;
+use std::env;
 
 const DISC_MARKET_INITIALIZED: [u8; 8] = [134, 160, 122, 87, 50, 3, 255, 81];
 const DISC_ORDER_PLACED: [u8; 8] = [96, 130, 204, 234, 169, 219, 216, 227];
@@ -129,6 +130,7 @@ pub async fn handle_event(sig: &str, slot: u64, data: &[u8], db: &Db) -> Result<
                 slot,
                 ev.market_id as i32,
                 ev.maker_order_id as i64,
+                ev.taker_order_id as i64,
                 map_side(&ev.taker_side),
                 &ev.taker.to_string(),
                 &ev.maker.to_string(),
@@ -141,28 +143,32 @@ pub async fn handle_event(sig: &str, slot: u64, data: &[u8], db: &Db) -> Result<
 
             let mut diff = OrderbookDiff::new(slot as u64, ev.market_id as i32);
 
-
-
-            // Above we just updated the order in the Live order, So If the order is Still Partially Filled
-            // Then in that case we will push it to OrderbookDiff
-            // If the maker order was only partially filled, re-adding it with the
-            // updated remaining_quantity so clients will be shown the correct
+            // The maker is on the opposite side of the taker.
+            // taker_side=Buy  → maker was selling → maker lives in *_asks
+            // taker_side=Sell → maker was buying  → maker lives in *_bids
             if let Ok(Some(updated)) = db
                 .get_live_order(ev.market_id as i32, ev.maker_order_id as i64)
                 .await
             {
                 if updated.status == OrderStatus::PartiallyFilled {
+                    // Remove the old entry first, then re-add with updated remaining_quantity.
+                    // Without the remove, the in-memory orderbook would have two entries
+                    // for the same order_id (old qty + new qty).
                     match (&ev.token_type, &ev.taker_side) {
                         (crate::types::TokenType::Yes, crate::types::OrderSide::Buy) => {
+                            diff.yes_asks_removed.push(ev.maker_order_id as i64);
                             diff.yes_asks_added.push(updated)
                         }
                         (crate::types::TokenType::Yes, crate::types::OrderSide::Sell) => {
+                            diff.yes_bids_removed.push(ev.maker_order_id as i64);
                             diff.yes_bids_added.push(updated)
                         }
                         (crate::types::TokenType::No, crate::types::OrderSide::Buy) => {
+                            diff.no_asks_removed.push(ev.maker_order_id as i64);
                             diff.no_asks_added.push(updated)
                         }
                         (crate::types::TokenType::No, crate::types::OrderSide::Sell) => {
+                            diff.no_bids_removed.push(ev.maker_order_id as i64);
                             diff.no_bids_added.push(updated)
                         }
                     }
@@ -179,6 +185,53 @@ pub async fn handle_event(sig: &str, slot: u64, data: &[u8], db: &Db) -> Result<
                         }
                         (crate::types::TokenType::No, crate::types::OrderSide::Sell) => {
                             diff.no_bids_removed.push(ev.maker_order_id as i64)
+                        }
+                    }
+                }
+            }
+
+            // Only limit-order takers (taker_order_id != 0) have a live_order entry.
+            // Market-order takers (taker_order_id == 0) never rest on the book.
+            // taker_side=Buy  → taker lives in *_bids
+            // taker_side=Sell → taker lives in *_asks
+            if ev.taker_order_id != 0 {
+                if let Ok(Some(updated_taker)) = db
+                    .get_live_order(ev.market_id as i32, ev.taker_order_id as i64)
+                    .await
+                {
+                    if updated_taker.status == OrderStatus::PartiallyFilled {
+                        match (&ev.token_type, &ev.taker_side) {
+                            (crate::types::TokenType::Yes, crate::types::OrderSide::Buy) => {
+                                diff.yes_bids_removed.push(ev.taker_order_id as i64);
+                                diff.yes_bids_added.push(updated_taker)
+                            }
+                            (crate::types::TokenType::Yes, crate::types::OrderSide::Sell) => {
+                                diff.yes_asks_removed.push(ev.taker_order_id as i64);
+                                diff.yes_asks_added.push(updated_taker)
+                            }
+                            (crate::types::TokenType::No, crate::types::OrderSide::Buy) => {
+                                diff.no_bids_removed.push(ev.taker_order_id as i64);
+                                diff.no_bids_added.push(updated_taker)
+                            }
+                            (crate::types::TokenType::No, crate::types::OrderSide::Sell) => {
+                                diff.no_asks_removed.push(ev.taker_order_id as i64);
+                                diff.no_asks_added.push(updated_taker)
+                            }
+                        }
+                    } else if updated_taker.status == OrderStatus::Filled {
+                        match (&ev.token_type, &ev.taker_side) {
+                            (crate::types::TokenType::Yes, crate::types::OrderSide::Buy) => {
+                                diff.yes_bids_removed.push(ev.taker_order_id as i64)
+                            }
+                            (crate::types::TokenType::Yes, crate::types::OrderSide::Sell) => {
+                                diff.yes_asks_removed.push(ev.taker_order_id as i64)
+                            }
+                            (crate::types::TokenType::No, crate::types::OrderSide::Buy) => {
+                                diff.no_bids_removed.push(ev.taker_order_id as i64)
+                            }
+                            (crate::types::TokenType::No, crate::types::OrderSide::Sell) => {
+                                diff.no_asks_removed.push(ev.taker_order_id as i64)
+                            }
                         }
                     }
                 }

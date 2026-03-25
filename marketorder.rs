@@ -453,6 +453,7 @@ impl<'info> MarketOrder<'info> {
             emit!(OrderMatched {
                 market_id,
                 maker_order_id,
+                taker_order_id: 0, // For market orders never rest on book
                 taker_side: side,
                 taker: self.user.key(),
                 maker: maker_pubkey,
