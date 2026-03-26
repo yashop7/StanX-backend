@@ -7,6 +7,7 @@ use crate::{bootstrap::bootstrap, receiver::run, routes::{user::{create_user, si
 use crate::routes::market::{
     get_markets, get_market, get_orderbook, get_trades, get_user_orders, get_user_trades,
 };
+use crate::routes::health::health_handler;
 use crate::state::state::AppState;
 pub mod routes;
 pub mod middleware;
@@ -22,17 +23,20 @@ async fn main() {
     let db_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let db = Arc::new(Db::new(&db_url).await.unwrap());
 
-    let app_state = AppState {
-        db,
-        orderbook: Arc::new(RwLock::new(HashMap::new())),
-        ob_channels: Arc::new(RwLock::new(HashMap::new()))
-    };
-
     let redis_port =
         env::var("REDIS_PORT").map_err(|_| anyhow::anyhow!("REDIS_PORT not set in environment")).unwrap();
     let redis_address = env::var("REDIS_ADDRESS")
         .map_err(|_| anyhow::anyhow!("REDIS_ADDRESS not set in environment")).unwrap();
     let redis_url = format!("redis://{}:{}", redis_address, redis_port);
+
+    let redis_client = redis::Client::open(redis_url.clone()).expect("Invalid Redis URL");
+
+    let app_state = AppState {
+        db,
+        orderbook: Arc::new(RwLock::new(HashMap::new())),
+        ob_channels: Arc::new(RwLock::new(HashMap::new())),
+        redis: redis_client,
+    };
 log::info!("Hello ");
 // println!("Hello");
 
@@ -45,6 +49,7 @@ log::info!("Hello ");
     });
     
     let app = Router::new()
+        .route("/health", get(health_handler))
         .route("/ws/:market_id", get(ws_handler))
         .route("/signup", post(create_user))
         .route("/signin", post(signin))
