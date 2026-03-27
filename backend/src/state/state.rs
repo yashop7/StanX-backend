@@ -26,9 +26,8 @@ pub enum MessagetoEngine {
 
 #[derive(Clone)]
 pub struct AppState {
-    // Like here what messages to send to the market, what can be
-    // Like can be Split, Merge, Market, Limit, Cancel, 
-    pub orderbook : Arc<RwLock<HashMap<i32, Arc<OrderbookState>>>>,
-    pub ob_channels : Arc<RwLock<HashMap<i32, broadcast::Sender<OrderbookDiff>>>>,
-    pub db: Arc<Db>
+    pub orderbook: Arc<RwLock<HashMap<i32, Arc<OrderbookState>>>>,
+    pub ob_channels: Arc<RwLock<HashMap<i32, broadcast::Sender<OrderbookDiff>>>>,
+    pub db: Arc<Db>,
+    pub redis: redis::Client,
 }

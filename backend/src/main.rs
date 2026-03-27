@@ -21,8 +21,15 @@ async fn main() {
 
     dotenvy::from_filename("backend/.env").ok();
     let db_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    let db = Arc::new(Db::new(&db_url).await.unwrap());
-
+    let db = Arc::new(
+        Db::new(&db_url)
+            .await
+            .map_err(|e| {
+                log::error!("Failed to initialize database: {}", e);
+                panic!("Database initialization failed: {}", e)
+            })
+            .unwrap()
+    );
     let redis_port =
         env::var("REDIS_PORT").map_err(|_| anyhow::anyhow!("REDIS_PORT not set in environment")).unwrap();
     let redis_address = env::var("REDIS_ADDRESS")

@@ -43,10 +43,14 @@ async fn handle_socket(mut socket: WebSocket, state: AppState, market_id: i32) {
     //         This gives THIS client its own receiver
     let mut rx = {
         let ch = state.ob_channels.read().unwrap();
-        ch.get(&market_id).unwrap().subscribe()
-        //                          ↑
-        //   creates a new Receiver just for this connection
-        //   independent of all other clients
+        match ch.get(&market_id) {
+            Some(sender) => sender.subscribe(),
+            None => {
+                // No channel exists yet, market has no orders, nothing to stream
+                log::info!("No broadcast channel for market_id={}, closing ws", market_id);
+                return;
+            }
+        }
     };
 
     // STEP 3: Loop — forward every diff to this client
