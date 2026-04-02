@@ -1,7 +1,7 @@
 use crate::types::*;
 use anchor_lang::AnchorDeserialize;
 use anyhow::Result;
-use common::OrderbookDiff;
+use common::{OrderbookDiff, TradeTick};
 use db::models::events::{LiveOrder, OrderSide, OrderStatus, TokenType, WinningOutcome};
 use db::Db;
 use redis::Commands;
@@ -69,7 +69,7 @@ pub async fn handle_event(sig: &str, slot: u64, data: &[u8], db: &Db) -> Result<
                 sig
             );
 
-            db.store_order_placed(
+            if let Err(e) = db.store_order_placed(
                 sig,
                 slot,
                 ev.market_id as i32,
@@ -81,7 +81,25 @@ pub async fn handle_event(sig: &str, slot: u64, data: &[u8], db: &Db) -> Result<
                 ev.quantity as i64,
                 ev.timestamp,
             )
-            .await?;
+            .await
+            {
+                // FK violation (code 23503) means the market was never indexed.
+                // This happens when the indexer was down during MarketInitialized.
+                // Skip this order — it will be recovered by the backfill on next restart.
+                let err_str = e.to_string();
+                let is_fk_violation = err_str.contains("23503")
+                    || err_str.contains("foreign key constraint");
+
+                if is_fk_violation {
+                    log::warn!(
+                        "Skipping OrderPlaced sig={} market={} order={}: \
+                         market not in DB (missed MarketInitialized — run backfill)",
+                        sig, ev.market_id, ev.order_id
+                    );
+                    return Ok(());
+                }
+                return Err(e);
+            }
 
             // Build the LiveOrder and push it into the correct side of the diff
             let order = LiveOrder {
@@ -238,6 +256,19 @@ pub async fn handle_event(sig: &str, slot: u64, data: &[u8], db: &Db) -> Result<
             }
 
             publish_diff(&mut publisher, ev.market_id as i32, &diff)?;
+
+            // Publish a TradeTick so backend WS clients can update live candles
+            let tick = TradeTick {
+                market_id: ev.market_id as i32,
+                token_type: match &ev.token_type {
+                    crate::types::TokenType::Yes => "yes".to_string(),
+                    crate::types::TokenType::No  => "no".to_string(),
+                },
+                price:           ev.price as i64,
+                quantity:        ev.quantity as i64,
+                event_timestamp: ev.timestamp,
+            };
+            publish_tick(&mut publisher, ev.market_id as i32, &tick)?;
         }
 
         DISC_ORDER_CANCELLED => {
@@ -433,6 +464,19 @@ fn publish_diff(
     publisher
         .publish::<String, String, ()>(channel.clone(), msg)
         .map_err(|e| anyhow::anyhow!("Failed to publish to {}: {}", channel, e))?;
+    Ok(())
+}
+
+fn publish_tick(
+    publisher: &mut redis::Connection,
+    market_id: i32,
+    tick: &TradeTick,
+) -> Result<()> {
+    let msg = serde_json::to_string(tick)?;
+    let channel = format!("trades:market:{}", market_id);
+    publisher
+        .publish::<String, String, ()>(channel.clone(), msg)
+        .map_err(|e| anyhow::anyhow!("Failed to publish tick to {}: {}", channel, e))?;
     Ok(())
 }
 

@@ -66,66 +66,84 @@ async fn main() -> Result<()> {
 
 
     let db = Db::new(&db_url).await?;
-    let client = PubsubClient::new(&rpc_url).await?;
 
     let filter = RpcTransactionLogsFilter::Mentions(vec![program_id.to_string()]);
     let config = RpcTransactionLogsConfig { commitment: None };
-    let (mut log_stream, _unsubscribe) = client.logs_subscribe(filter, config).await?;
 
-    log::info!("Indexer listening for program {}", program_id);
+    let mut backoff_secs: u64 = 1;
 
-    let mut seen_signatures: HashSet<String> = HashSet::new();
+    loop {
+        log::info!("Indexer: connecting to WS {}", rpc_url);
 
+        let client = match PubsubClient::new(&rpc_url).await {
+            Ok(c) => c,
+            Err(e) => {
+                log::error!("WS connect failed: {}. Retrying in {}s", e, backoff_secs);
+                tokio::time::sleep(tokio::time::Duration::from_secs(backoff_secs)).await;
+                backoff_secs = (backoff_secs * 2).min(60);
+                continue;
+            }
+        };
 
+        let (mut log_stream, _unsubscribe) =
+            match client.logs_subscribe(filter.clone(), config.clone()).await {
+                Ok(s) => s,
+                Err(e) => {
+                    log::error!("Subscribe failed: {}. Retrying in {}s", e, backoff_secs);
+                    tokio::time::sleep(tokio::time::Duration::from_secs(backoff_secs)).await;
+                    backoff_secs = (backoff_secs * 2).min(60);
+                    continue;
+                }
+            };
 
+        log::info!("Indexer listening for program {}", program_id);
+        backoff_secs = 1; // reset after successful connect
 
+        let mut seen_signatures: HashSet<String> = HashSet::new();
 
+        while let Some(msg) = log_stream.next().await {
+            if msg.value.err.is_some() {
+                continue;
+            }
 
+            let slot = msg.context.slot;
+            let signature = &msg.value.signature;
 
+            // Skip null signature (simulated/preflight transactions)
+            if signature.chars().all(|c| c == '1') {
+                log::debug!("Skipping simulated tx sig={}", signature);
+                continue;
+            }
 
+            if seen_signatures.contains(signature) {
+                log::debug!("Skipping duplicate sig={}", signature);
+                continue;
+            }
+            seen_signatures.insert(signature.clone());
 
-
-    while let Some(msg) = log_stream.next().await {
-        if msg.value.err.is_some() {
-            // Skipping the message with err
-            continue;
-        }
-
-        let slot = msg.context.slot;
-        let signature = &msg.value.signature;
-
-        // Skip null signature (simulated/preflight transactions)
-        if signature.chars().all(|c| c == '1') {
-            log::debug!("Skipping simulated tx sig={}", signature);
-            continue;
-        }
-
-        if seen_signatures.contains(signature) {
-            log::debug!("Skipping duplicate sig={}", signature);
-            continue;
-        }
-        seen_signatures.insert(signature.clone());
-
-        for log in msg.value.logs {
-            if let Some(val) = log.strip_prefix("Program data: ") {
-                // Data is Base 64 Encoded
-                if let Ok(data) = B64.decode(val) {
-                    if let Err(e) = event_handler::handle_event(signature, slot, &data, &db).await {
-                        log::error!(
-                            "Event handling error sig={}: {} | raw_hex={}",
-                            signature,
-                            e,
-                            data.iter()
-                                .map(|b| format!("{:02x}", b))
-                                .collect::<Vec<_>>()
-                                .join(" ")
-                        );
+            for log in msg.value.logs {
+                if let Some(val) = log.strip_prefix("Program data: ") {
+                    // Data is Base 64 Encoded
+                    if let Ok(data) = B64.decode(val) {
+                        if let Err(e) = event_handler::handle_event(signature, slot, &data, &db).await {
+                            log::error!(
+                                "Event handling error sig={}: {} | raw_hex={}",
+                                signature,
+                                e,
+                                data.iter()
+                                    .map(|b| format!("{:02x}", b))
+                                    .collect::<Vec<_>>()
+                                    .join(" ")
+                            );
+                        }
                     }
                 }
             }
         }
+
+        // Stream ended (WS disconnected) — reconnect immediately
+        log::warn!("Indexer: log stream ended, reconnecting...");
     }
-    Ok(())
 }
 
 // Backfill the function

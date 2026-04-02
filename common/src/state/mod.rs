@@ -3,6 +3,18 @@ use std::collections::HashMap;
 use db::models::events::{LiveOrder, OrderbookResponse};
 use serde::{Deserialize, Serialize};
 
+/// Published to Redis `trades:market:{id}` on every OrderMatched event.
+/// Consumed by the backend to stream live candle updates to frontend clients.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct TradeTick {
+    pub market_id: i32,
+    /// "yes" or "no"
+    pub token_type: String,
+    pub price: i64,
+    pub quantity: i64,
+    pub event_timestamp: i64,
+}
+
 // For orderbookState
 pub trait OrderbookWrite {
     // pushing order in orderbook

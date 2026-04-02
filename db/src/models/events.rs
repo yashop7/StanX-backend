@@ -93,10 +93,19 @@ pub struct Trade {
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
-// =============================================================================
-// Orderbook response shape — what the API returns
-// =============================================================================
+// HistoryPoint one point on the probability line chart
+// Follows format: { t: unix_ms, p: "0.65" }
+// p is the raw on-chain price as a string — frontend divides by price_decimals
 
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+pub struct HistoryPoint {
+    /// Unix timestamp in milliseconds
+    pub t: i64,
+    /// Last traded price in this bucket (raw on-chain integer, as string)
+    pub p: String,
+}
+
+// Orderbook response shape — what the API returns
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OrderbookResponse {
     pub market_id: i32,
@@ -106,13 +115,8 @@ pub struct OrderbookResponse {
     pub no_sell_orders: Vec<LiveOrder>,
 }
 
-// =============================================================================
 // Database write operations — called by event-listener
-// =============================================================================
-
 impl Db {
-    // ── Market lifecycle ─────────────────────────────────────────────────
-
     pub async fn store_market_initialized(
         &self,
         signature: &str,
@@ -279,7 +283,6 @@ impl Db {
         tx.commit().await?;
         Ok(())
     }
-
 
     pub async fn store_order_placed(
         &self,
@@ -523,7 +526,6 @@ impl Db {
         Ok(())
     }
 
-
     pub async fn store_tokens_split(
         &self,
         signature: &str,
@@ -657,22 +659,16 @@ impl Db {
     }
 
     pub async fn get_cursor(&self) -> Result<Option<(String, i64)>> {
-        let row: Option<(String, i64)> = sqlx::query_as(
-            "SELECT last_signature, last_slot FROM indexer_cursor WHERE id = 1",
-        )
-        .fetch_optional(&self.pool)
-        .await?;
+        let row: Option<(String, i64)> =
+            sqlx::query_as("SELECT last_signature, last_slot FROM indexer_cursor WHERE id = 1")
+                .fetch_optional(&self.pool)
+                .await?;
         Ok(row)
     }
 
-
     // KEEPING THEM ON HOLD, WE WILL FETCH THEM FROM THE IN-MEMORY ORDERBOOK
 
-
-    // =====================================================================
     // READ QUERIES — called by the backend API
-    // =====================================================================
-
     /// Get the full orderbook for a market (only open/partially_filled orders)
     pub async fn get_orderbook(&self, market_id: i32) -> Result<OrderbookResponse> {
         let orders: Vec<LiveOrder> = sqlx::query_as(
@@ -729,12 +725,10 @@ impl Db {
     /// Get a single market by ID
     pub async fn get_market(&self, market_id: i32) -> Result<Option<Market>> {
         println!("market_id: {}", market_id.clone());
-        let market = sqlx::query_as(
-            "SELECT * FROM markets WHERE market_id = $1",
-        )
-        .bind(market_id)
-        .fetch_optional(&self.pool)
-        .await?;
+        let market = sqlx::query_as("SELECT * FROM markets WHERE market_id = $1")
+            .bind(market_id)
+            .fetch_optional(&self.pool)
+            .await?;
         Ok(market)
     }
 
@@ -782,11 +776,7 @@ impl Db {
     }
 
     /// Get a user's trade history
-    pub async fn get_user_trades(
-        &self,
-        user_pubkey: &str,
-        limit: i64,
-    ) -> Result<Vec<Trade>> {
+    pub async fn get_user_trades(&self, user_pubkey: &str, limit: i64) -> Result<Vec<Trade>> {
         let trades = sqlx::query_as(
             r#"SELECT * FROM trades
                WHERE taker = $1 OR maker = $1
@@ -798,5 +788,73 @@ impl Db {
         .fetch_all(&self.pool)
         .await?;
         Ok(trades)
+    }
+
+    /// Get time-bucketed price history for the line chart.
+    /// Returns `[{ t: unix_ms, p: "price" }]` ordered oldest -> newest.
+    ///
+    /// `period` must be one of: 1H, 6H, 1D, 1W, 1M, 3M, ALL.
+    /// The server downsamples by picking the last traded price in each time bucket.
+    pub async fn get_price_history(
+        &self,
+        market_id: i32,
+        token_type: &str,
+        period: &str,
+    ) -> Result<Vec<HistoryPoint>> {
+        let (since_secs, bucket_secs): (i64, i64) = match period {
+            "1H" => (3_600, 60),
+            "6H" => (21_600, 300),
+            "1D" => (86_400, 900),
+            "1W" => (604_800, 3_600),
+            "1M" => (2_592_000, 14_400),
+            "3M" => (7_776_000, 43_200),
+            "ALL" => (0, 86_400),
+            _ => (86_400, 900), // default to 1D
+        };
+
+        let now_secs = chrono::Utc::now().timestamp();
+        let since_ts = if since_secs == 0 {
+            0
+        } else {
+            now_secs - since_secs
+        };
+
+        let points: Vec<HistoryPoint> = sqlx::query_as(
+            r#"SELECT
+                   (bucket * $3) * 1000       AS t,
+                   last_price::TEXT            AS p
+               FROM (
+                   SELECT
+                       event_timestamp / $3    AS bucket,
+                       price                   AS last_price,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY event_timestamp / $3
+                           ORDER BY event_timestamp DESC
+                       ) AS rn
+                   FROM event_order_matched
+                   WHERE market_id = $1
+                     AND token_type = $2::token_type
+                     AND event_timestamp >= $4
+               ) sub
+               WHERE rn = 1
+               ORDER BY bucket ASC"#,
+        )
+        .bind(market_id)
+        .bind(token_type)
+        .bind(bucket_secs)
+        .bind(since_ts)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(points)
+    }
+
+    /// Get all markets created by a specific authority (user)
+    pub async fn get_user_markets(&self, authority: &str) -> Result<Vec<Market>> {
+        let markets =
+            sqlx::query_as("SELECT * FROM markets WHERE authority = $1 ORDER BY created_at DESC")
+                .bind(authority)
+                .fetch_all(&self.pool)
+                .await?;
+        Ok(markets)
     }
 }

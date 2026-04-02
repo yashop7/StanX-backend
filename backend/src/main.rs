@@ -3,9 +3,10 @@ use db::Db;
 use dotenvy;
 use std::{collections::HashMap, env, sync::{Arc, RwLock}};
 
-use crate::{bootstrap::bootstrap, receiver::run, routes::{user::{create_user, signin}, ws::ws_handler}};
+use crate::{bootstrap::bootstrap, receiver::run, routes::{user::{create_user, signin}, ws::{ws_handler, price_ws_handler}}};
 use crate::routes::market::{
     get_markets, get_market, get_orderbook, get_trades, get_user_orders, get_user_trades,
+    get_user_markets, get_prices,
 };
 use crate::routes::health::health_handler;
 use crate::state::state::AppState;
@@ -40,9 +41,10 @@ async fn main() {
 
     let app_state = AppState {
         db,
-        orderbook: Arc::new(RwLock::new(HashMap::new())),
-        ob_channels: Arc::new(RwLock::new(HashMap::new())),
-        redis: redis_client,
+        orderbook:      Arc::new(RwLock::new(HashMap::new())),
+        ob_channels:    Arc::new(RwLock::new(HashMap::new())),
+        trade_channels: Arc::new(RwLock::new(HashMap::new())),
+        redis:          redis_client,
     };
 log::info!("Hello ");
 // println!("Hello");
@@ -58,6 +60,7 @@ log::info!("Hello ");
     let app = Router::new()
         .route("/health", get(health_handler))
         .route("/ws/:market_id", get(ws_handler))
+        .route("/ws/price/:market_id", get(price_ws_handler))
         .route("/signup", post(create_user))
         .route("/signin", post(signin))
         .route("/markets", get(get_markets))
@@ -65,6 +68,8 @@ log::info!("Hello ");
         .route("/markets/:market_id/orderbook", get(get_orderbook))
         .route("/markets/:market_id/trades", get(get_trades)) // trades?limit=50
         .route("/markets/:market_id/orders/:user_pubkey", get(get_user_orders))
+        .route("/markets/:market_id/prices", get(get_prices))
+        .route("/user/:user_pubkey/markets", get(get_user_markets))
         .route("/user/:user_pubkey/trades", get(get_user_trades))// trades?limit=50
         .with_state(app_state);
 

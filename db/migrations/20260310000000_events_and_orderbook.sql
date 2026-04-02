@@ -170,6 +170,10 @@ CREATE TABLE event_order_matched (
     UNIQUE(signature, maker_order_id)
 );
 
+CREATE INDEX idx_event_order_matched_price
+ON event_order_matched (market_id, token_type, event_timestamp ASC);
+
+
 CREATE TABLE event_order_cancelled (
     id              SERIAL PRIMARY KEY,
     signature       VARCHAR(128) NOT NULL,

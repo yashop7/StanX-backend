@@ -18,3 +18,5 @@ uuid             = { workspace = true }
 common           = { workspace = true }
 redis            = { workspace = true }
 log              = { workspace = true }
+futures-util.workspace = true
+broadcast = "0.1.0"

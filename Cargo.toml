@@ -1,7 +1,7 @@
 [workspace]
 resolver = "3"
 packages = ["db", "backend", "ws", "common"]
-members = ["db", "backend", "ws", "common", "event-listener", "stanx-client-sdk"]
+members = ["db", "backend", "ws", "common", "event-listener"]
 
 [workspace.dependencies]
 actix-web        = "4.13.0"
@@ -33,7 +33,7 @@ chrono                     = { version = "0.4", features = ["serde"] }
 db     = { path = "db" }
 ws     = { path = "ws" }
 common = { path = "common" }
-axum             = "0.7"
+axum             = {version = "0.7" , features = ["ws"]}
 tower            = "0.4"
 tower-http       = { version = "0.5", features = ["cors"] }
-redis = { version = "*" }
+redis = { version = "*", features = ["tokio-comp", "aio"] }

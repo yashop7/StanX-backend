@@ -1,6 +1,6 @@
-use common::{OrderbookDiff, OrderbookState};
+use common::{OrderbookDiff, OrderbookState, TradeTick};
 use db::Db;
-use tokio::sync::{broadcast};
+use tokio::sync::broadcast;
 use std::{collections::HashMap, sync::{Arc, RwLock}};
 
 // This is our AppState
@@ -26,8 +26,9 @@ pub enum MessagetoEngine {
 
 #[derive(Clone)]
 pub struct AppState {
-    pub orderbook: Arc<RwLock<HashMap<i32, Arc<OrderbookState>>>>,
-    pub ob_channels: Arc<RwLock<HashMap<i32, broadcast::Sender<OrderbookDiff>>>>,
-    pub db: Arc<Db>,
-    pub redis: redis::Client,
+    pub orderbook:      Arc<RwLock<HashMap<i32, Arc<OrderbookState>>>>,
+    pub ob_channels:    Arc<RwLock<HashMap<i32, broadcast::Sender<OrderbookDiff>>>>,
+    pub trade_channels: Arc<RwLock<HashMap<i32, broadcast::Sender<TradeTick>>>>,
+    pub db:             Arc<Db>,
+    pub redis:          redis::Client,
 }
