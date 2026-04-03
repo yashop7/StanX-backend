@@ -45,6 +45,14 @@ async fn main() -> Result<()> {
     let redis_address = env::var("REDIS_ADDRESS")
         .map_err(|_| anyhow::anyhow!("REDIS_ADDRESS not set in environment"))?;
     let redis_url = format!("redis://{}:{}", redis_address, redis_port);
+    let http_url = env::var("SOLANA_HTTP_RPC_URL")
+        .unwrap_or_else(|_| "https://api.devnet.solana.com".to_string());
+    
+    let db = Db::new(&db_url).await?;
+    let rpc_client = RpcClient::new(http_url);
+
+    let filter = RpcTransactionLogsFilter::Mentions(vec![program_id.to_string()]);
+    let config = RpcTransactionLogsConfig { commitment: None };
 
     // Heartbeat: write current unix timestamp to Redis every 10s so the backend
     // can expose /health and the frontend knows the indexer is alive.
@@ -65,14 +73,14 @@ async fn main() -> Result<()> {
     });
 
 
-    let db = Db::new(&db_url).await?;
-
-    let filter = RpcTransactionLogsFilter::Mentions(vec![program_id.to_string()]);
-    let config = RpcTransactionLogsConfig { commitment: None };
-
     let mut backoff_secs: u64 = 1;
 
     loop {
+        // Backfill first, then catch up any events missed while we were offline
+        if let Err(e) = backfill(&db, &rpc_client, &program_id).await {
+            log::error!("Backfill failed: {}", e);
+        }
+
         log::info!("Indexer: connecting to WS {}", rpc_url);
 
         let client = match PubsubClient::new(&rpc_url).await {
@@ -158,7 +166,7 @@ pub async fn backfill(db: &Db, rpc_client: &RpcClient, program_id: &Pubkey) -> R
             Ok(sig) => {
                 until_signature = sig;
             }
-            Err(e) => {
+            Err(_e) => {
                 log::warn!("Signature Invalid");
                 return Ok(());
             }
