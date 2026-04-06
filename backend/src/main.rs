@@ -6,7 +6,7 @@ use std::{collections::HashMap, env, sync::{Arc, RwLock}};
 use crate::{bootstrap::bootstrap, receiver::run, routes::{user::{create_user, signin}, ws::{ws_handler, price_ws_handler}}};
 use crate::routes::market::{
     get_markets, get_market, get_orderbook, get_trades, get_user_orders, get_user_trades,
-    get_user_markets, get_prices,
+    get_user_markets, get_prices, preview_video, get_resolution,
 };
 use crate::routes::health::health_handler;
 use crate::state::state::AppState;
@@ -64,7 +64,9 @@ log::info!("Hello ");
         .route("/signup", post(create_user))
         .route("/signin", post(signin))
         .route("/markets", get(get_markets))
+        .route("/markets/preview", post(preview_video))
         .route("/markets/:market_id", get(get_market))
+        .route("/markets/:market_id/resolution", get(get_resolution))
         .route("/markets/:market_id/orderbook", get(get_orderbook))
         .route("/markets/:market_id/trades", get(get_trades)) // trades?limit=50
         .route("/markets/:market_id/orders/:user_pubkey", get(get_user_orders))

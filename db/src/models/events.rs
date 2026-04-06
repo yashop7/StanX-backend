@@ -105,6 +105,21 @@ pub struct HistoryPoint {
     pub p: String,
 }
 
+/// Oracle-computed resolution result for a market.
+/// Stored by oracle-service after the deadline passes.
+/// The market creator reads this and builds the SetWinner tx in their wallet.
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+pub struct MarketResolution {
+    pub market_id:    i32,
+    /// "OutcomeA" = YES wins, "OutcomeB" = NO wins
+    pub outcome:      String,
+    pub actual_value: i64,
+    pub threshold:    i64,
+    pub metric:       String,
+    pub video_id:     String,
+    pub resolved_at:  chrono::DateTime<chrono::Utc>,
+}
+
 // Orderbook response shape — what the API returns
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OrderbookResponse {
@@ -740,6 +755,59 @@ impl Db {
         .fetch_all(&self.pool)
         .await?;
         Ok(markets)
+    }
+
+    /// Get markets where the settlement deadline has passed but not yet settled.
+    /// Used by the oracle-service cron to find markets that need resolution.
+    pub async fn get_unsettled_expired_markets(&self, now_unix: i64) -> Result<Vec<Market>> {
+        let markets = sqlx::query_as(
+            r#"SELECT * FROM markets
+               WHERE status = 'active'
+                 AND settlement_deadline <= $1
+               ORDER BY settlement_deadline ASC"#,
+        )
+        .bind(now_unix)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(markets)
+    }
+
+    /// Store the oracle-computed resolution for a market.
+    pub async fn store_resolution(
+        &self,
+        market_id: i32,
+        outcome: &str,
+        actual_value: i64,
+        threshold: i64,
+        metric: &str,
+        video_id: &str,
+    ) -> Result<()> {
+        sqlx::query(
+            r#"INSERT INTO market_resolutions
+               (market_id, outcome, actual_value, threshold, metric, video_id)
+               VALUES ($1, $2, $3, $4, $5, $6)
+               ON CONFLICT (market_id) DO NOTHING"#,
+        )
+        .bind(market_id)
+        .bind(outcome)
+        .bind(actual_value)
+        .bind(threshold)
+        .bind(metric)
+        .bind(video_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    /// Fetch the oracle resolution for a market, if it exists.
+    pub async fn get_resolution(&self, market_id: i32) -> Result<Option<MarketResolution>> {
+        let row = sqlx::query_as(
+            "SELECT * FROM market_resolutions WHERE market_id = $1",
+        )
+        .bind(market_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row)
     }
 
     /// Get recent trades for a market
