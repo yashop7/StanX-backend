@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use common::{OrderbookDiff, OrderbookState, OrderbookWrite};
+use common::{OrderbookDiff, OrderbookState, OrderbookWrite, TradeTick};
 use log::{error, warn, info};
 use tokio::sync::broadcast;
 
@@ -35,9 +35,14 @@ pub async fn bootstrap(state: &AppState) -> Result<()> {
             guard.insert(market_info.market_id, Arc::new(orderbook));
         }
 
-        let (tx, _rx) = broadcast::channel::<OrderbookDiff>(256);
+        let (ob_tx, _) = broadcast::channel::<OrderbookDiff>(256);
         if let Ok(mut guard) = state.ob_channels.write() {
-            guard.insert(market_info.market_id, tx);
+            guard.insert(market_info.market_id, ob_tx);
+        }
+
+        let (trade_tx, _) = broadcast::channel::<TradeTick>(256);
+        if let Ok(mut guard) = state.trade_channels.write() {
+            guard.insert(market_info.market_id, trade_tx);
         }
     }
 
