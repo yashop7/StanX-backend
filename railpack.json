@@ -1,0 +1,7 @@
+{
+  "build": {
+    "cmds": [
+      "cargo build --release --workspace"
+    ]
+  }
+}
