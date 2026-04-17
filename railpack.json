@@ -3,5 +3,8 @@
     "cmds": [
       "cargo build --release --workspace"
     ]
-  }
+  },
+  "output": [
+    "target/release"
+  ]
 }
