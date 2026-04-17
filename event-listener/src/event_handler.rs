@@ -27,7 +27,12 @@ pub async fn handle_event(sig: &str, slot: u64, data: &[u8], db: &Db) -> Result<
         env::var("REDIS_PORT").map_err(|_| anyhow::anyhow!("REDIS_PORT not set in environment"))?;
     let redis_address = env::var("REDIS_ADDRESS")
         .map_err(|_| anyhow::anyhow!("REDIS_ADDRESS not set in environment"))?;
-    let redis_url = format!("redis://{}:{}", redis_address, redis_port);
+    let redis_password = env::var("REDIS_PASSWORD").unwrap_or_default();
+    let redis_url = if redis_password.is_empty() {
+        format!("redis://{}:{}", redis_address, redis_port)
+    } else {
+        format!("redis://default:{}@{}:{}", redis_password, redis_address, redis_port)
+    };
 
     let redis_client = redis::Client::open(redis_url.clone())
         .map_err(|e| anyhow::anyhow!("Failed to connect to Redis at {}: {}", redis_url, e))?;

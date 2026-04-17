@@ -35,7 +35,12 @@ async fn main() {
         env::var("REDIS_PORT").map_err(|_| anyhow::anyhow!("REDIS_PORT not set in environment")).unwrap();
     let redis_address = env::var("REDIS_ADDRESS")
         .map_err(|_| anyhow::anyhow!("REDIS_ADDRESS not set in environment")).unwrap();
-    let redis_url = format!("redis://{}:{}", redis_address, redis_port);
+    let redis_password = env::var("REDIS_PASSWORD").unwrap_or_default();
+    let redis_url = if redis_password.is_empty() {
+        format!("redis://{}:{}", redis_address, redis_port)
+    } else {
+        format!("redis://default:{}@{}:{}", redis_password, redis_address, redis_port)
+    };
 
     let redis_client = redis::Client::open(redis_url.clone()).expect("Invalid Redis URL");
 

@@ -44,9 +44,14 @@ async fn main() -> Result<()> {
         env::var("REDIS_PORT").map_err(|_| anyhow::anyhow!("REDIS_PORT not set in environment"))?;
     let redis_address = env::var("REDIS_ADDRESS")
         .map_err(|_| anyhow::anyhow!("REDIS_ADDRESS not set in environment"))?;
-    let redis_url = format!("redis://{}:{}", redis_address, redis_port);
+    let redis_password = env::var("REDIS_PASSWORD").unwrap_or_default();
+    let redis_url = if redis_password.is_empty() {
+        format!("redis://{}:{}", redis_address, redis_port)
+    } else {
+        format!("redis://default:{}@{}:{}", redis_password, redis_address, redis_port)
+    };
     let http_url = env::var("SOLANA_HTTP_RPC_URL")
-        .unwrap_or_else(|_| "https://api.devnet.solana.com".to_string());
+        .unwrap_or_else(|_| "https://apidevnet.solana.com".to_string());
     
     let db = Db::new(&db_url).await?;
     let rpc_client = RpcClient::new(http_url);
