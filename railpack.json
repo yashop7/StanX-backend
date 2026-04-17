@@ -1,11 +1,10 @@
 {
   "build": {
     "cmds": [
-      "cargo build --release --workspace",
-      "mkdir -p bin",
-      "cp target/release/backend bin/",
-      "cp target/release/ws bin/",
-      "cp target/release/event-listener bin/"
+      "cargo build --release --workspace"
     ]
-  }
+  },
+  "output": [
+    "target/release"
+  ]
 }
