@@ -111,8 +111,7 @@ pub struct HistoryPoint {
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
 pub struct MarketResolution {
     pub market_id:    i32,
-    /// "OutcomeA" = YES wins, "OutcomeB" = NO wins
-    pub outcome:      String,
+    pub outcome:      String, // "OutcomeA","OutcomeB"
     pub actual_value: i64,
     pub threshold:    i64,
     pub metric:       String,

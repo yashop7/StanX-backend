@@ -3,8 +3,9 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use db::models::events::{Market, OrderbookResponse, HistoryPoint, Trade, LiveOrder};
+use db::models::events::{Market, MarketResolution, OrderbookResponse, HistoryPoint, Trade, LiveOrder};
 use serde::{Deserialize, Serialize};
+use std::env;
 
 use crate::state::state::AppState;
 
@@ -145,4 +146,143 @@ pub async fn get_user_trades(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(Json(trades))
+}
+
+// YouTube video preview, fetches metadata for market creation UI
+
+#[derive(Deserialize)]
+pub struct PreviewRequest {
+    pub url: String,
+}
+
+#[derive(Serialize)]
+pub struct PreviewResponse {
+    pub video_id: String,
+    pub title: String,
+    pub thumbnail: String,
+    pub channel_name: String,
+    pub current_views: u64,
+    pub current_likes: u64,
+    pub current_comments: u64,
+    pub published_at: String,
+}
+
+/// GET /markets/:market_id/resolution
+/// Returns the oracle-computed outcome once the deadline has passed.
+/// Frontend polls this. When it appears, show "Settle Market" button to the creator.
+pub async fn get_resolution(
+    State(state): State<AppState>,
+    Path(market_id): Path<i32>,
+) -> Result<Json<MarketResolution>, (StatusCode, String)> {
+    let resolution = state
+        .db
+        .get_resolution(market_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::NOT_FOUND, "Resolution not yet available".to_string()))?;
+    Ok(Json(resolution))
+}
+
+/// POST /markets/preview
+/// Frontend sends { "url": "https://youtube.com/watch?v=abc123" }
+/// Backend calls YouTube Data API and returns video metadata
+pub async fn preview_video(
+    Json(body): Json<PreviewRequest>,
+) -> Result<Json<PreviewResponse>, (StatusCode, String)> {
+    let video_id = extract_video_id(&body.url)
+        .ok_or((StatusCode::BAD_REQUEST, "Invalid YouTube URL".to_string()))?;
+
+    let api_key = env::var("YOUTUBE_API_KEY")
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "YouTube API key not configured".to_string()))?;
+
+    let yt_url = format!(
+        "https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id={}&key={}",
+        video_id, api_key
+    );
+
+    let client = reqwest::Client::new();
+    let resp: serde_json::Value = client
+        .get(&yt_url)
+        .send()
+        .await
+        .map_err(|e| (StatusCode::BAD_GATEWAY, format!("YouTube API request failed: {}", e)))?
+        .json()
+        .await
+        .map_err(|e| (StatusCode::BAD_GATEWAY, format!("YouTube API parse failed: {}", e)))?;
+
+    let items = resp["items"]
+        .as_array()
+        .ok_or((StatusCode::NOT_FOUND, "Video not found".to_string()))?;
+
+    if items.is_empty() {
+        return Err((StatusCode::NOT_FOUND, "Video not found".to_string()));
+    }
+
+    let item = &items[0];
+    let snippet = &item["snippet"];
+    let stats = &item["statistics"];
+
+    let thumbnails = &snippet["thumbnails"];
+    let thumbnail = thumbnails["maxres"]["url"]
+        .as_str()
+        .or_else(|| thumbnails["high"]["url"].as_str())
+        .or_else(|| thumbnails["medium"]["url"].as_str())
+        .unwrap_or("")
+        .to_string();
+
+    Ok(Json(PreviewResponse {
+        video_id: video_id.to_string(),
+        title: snippet["title"].as_str().unwrap_or("").to_string(),
+        thumbnail,
+        channel_name: snippet["channelTitle"].as_str().unwrap_or("").to_string(),
+        current_views: stats["viewCount"]
+            .as_str()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0),
+        current_likes: stats["likeCount"]
+            .as_str()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0),
+        current_comments: stats["commentCount"]
+            .as_str()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0),
+        published_at: snippet["publishedAt"].as_str().unwrap_or("").to_string(),
+    }))
+}
+
+/// Extracts video ID from various YouTube URL formats (Reels or normal Y.T Video)
+fn extract_video_id(url: &str) -> Option<&str> {
+    // https://www.youtube.com/watch?v=VIDEO_ID
+    if let Some(pos) = url.find("v=") {
+        let start = pos + 2;
+        let rest = &url[start..];
+        let end = rest.find('&').or_else(|| rest.find('#')).unwrap_or(rest.len());
+        if end >= 11 {
+            return Some(&rest[..end]);
+        }
+    }
+    // https://youtu.be/VIDEO_ID
+    if url.contains("youtu.be/") {
+        if let Some(pos) = url.find("youtu.be/") {
+            let start = pos + 9;
+            let rest = &url[start..];
+            let end = rest.find('?').or_else(|| rest.find('#')).unwrap_or(rest.len());
+            if end >= 11 {
+                return Some(&rest[..end]);
+            }
+        }
+    }
+    // https://www.youtube.com/shorts/VIDEO_ID
+    if url.contains("/shorts/") {
+        if let Some(pos) = url.find("/shorts/") {
+            let start = pos + 8;
+            let rest = &url[start..];
+            let end = rest.find('?').or_else(|| rest.find('#')).unwrap_or(rest.len());
+            if end >= 11 {
+                return Some(&rest[..end]);
+            }
+        }
+    }
+    None
 }
