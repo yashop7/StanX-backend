@@ -78,14 +78,13 @@ async fn main() -> Result<()> {
     });
 
 
+    if let Err(e) = backfill(&db, &rpc_client, &program_id).await {
+        log::error!("Backfill failed: {}", e);
+    }
+
     let mut backoff_secs: u64 = 1;
 
     loop {
-        // Backfill first, then catch up any events missed while we were offline
-        if let Err(e) = backfill(&db, &rpc_client, &program_id).await {
-            log::error!("Backfill failed: {}", e);
-        }
-
         log::info!("Indexer: connecting to WS {}", rpc_url);
 
         let client = match PubsubClient::new(&rpc_url).await {

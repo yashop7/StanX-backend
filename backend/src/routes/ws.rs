@@ -37,16 +37,19 @@ async fn handle_socket(mut socket: WebSocket, state: AppState, market_id: i32) {
         None => log::info!("No orderbook snapshot for market_id={}", market_id)
     }
 
-    let rx_opt = {
-        let ch = state.ob_channels.read().unwrap();
-        ch.get(&market_id).map(|s| s.subscribe())
-    };
-    let mut rx = match rx_opt {
-        Some(rx) => rx,
-        None => {
-            log::info!("No broadcast channel for market_id={}, closing ws", market_id);
-            socket.close().await.ok();
-            return;
+    let mut rx = {
+        let rx_opt = {
+            let ch = state.ob_channels.read().unwrap();
+            ch.get(&market_id).map(|s| s.subscribe())
+        };
+        match rx_opt {
+            Some(rx) => rx,
+            None => {
+                // Market exists but wasn't bootstrapped (created after startup), create channel lazily
+                let (tx, rx) = tokio::sync::broadcast::channel(256);
+                state.ob_channels.write().unwrap().insert(market_id, tx);
+                rx
+            }
         }
     };
 
@@ -114,16 +117,18 @@ async fn handle_price_socket(
     token: String,
 ) {
     // Subscribe to trade ticks for this market
-    let rx_opt = {
-        let ch = state.trade_channels.read().unwrap();
-        ch.get(&market_id).map(|s| s.subscribe())
-    };
-    let mut rx = match rx_opt {
-        Some(rx) => rx,
-        None => {
-            log::info!("No trade channel for market_id={}, closing price ws", market_id);
-            socket.close().await.ok();
-            return;
+    let mut rx = {
+        let rx_opt = {
+            let ch = state.trade_channels.read().unwrap();
+            ch.get(&market_id).map(|s| s.subscribe())
+        };
+        match rx_opt {
+            Some(rx) => rx,
+            None => {
+                let (tx, rx) = tokio::sync::broadcast::channel(256);
+                state.trade_channels.write().unwrap().insert(market_id, tx);
+                rx
+            }
         }
     };
 

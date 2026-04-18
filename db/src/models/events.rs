@@ -310,10 +310,10 @@ impl Db {
         price: i64,
         quantity: i64,
         event_timestamp: i64,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         let mut tx = self.pool.begin().await?;
 
-        sqlx::query(
+        let result = sqlx::query(
             r#"INSERT INTO event_order_placed
                (signature, slot, market_id, order_id, user_pubkey, side, token_type, price, quantity, event_timestamp)
                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
@@ -332,7 +332,11 @@ impl Db {
         .execute(&mut *tx)
         .await?;
 
-        // Insert into live_orders (materialized orderbook)
+        if result.rows_affected() == 0 {
+            tx.commit().await?;
+            return Ok(false);
+        }
+
         sqlx::query(
             r#"INSERT INTO live_orders
                (order_id, market_id, user_pubkey, side, token_type, price,
@@ -352,7 +356,7 @@ impl Db {
         .await?;
 
         tx.commit().await?;
-        Ok(())
+        Ok(true)
     }
 
     pub async fn store_order_matched(
@@ -369,11 +373,10 @@ impl Db {
         price: i64,
         quantity: i64,
         event_timestamp: i64,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         let mut tx = self.pool.begin().await?;
 
-        // 1. Event log
-        sqlx::query(
+        let result = sqlx::query(
             r#"INSERT INTO event_order_matched
                (signature, slot, market_id, maker_order_id, taker_side, taker, maker,
                 token_type, price, quantity, event_timestamp)
@@ -393,6 +396,11 @@ impl Db {
         .bind(event_timestamp)
         .execute(&mut *tx)
         .await?;
+
+        if result.rows_affected() == 0 {
+            tx.commit().await?;
+            return Ok(false);
+        }
 
         // 2. Trade history
         sqlx::query(
@@ -452,7 +460,7 @@ impl Db {
         }
 
         tx.commit().await?;
-        Ok(())
+        Ok(true)
     }
 
     pub async fn store_order_cancelled(
@@ -466,10 +474,10 @@ impl Db {
         token_type: TokenType,
         remaining_quantity: i64,
         event_timestamp: i64,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         let mut tx = self.pool.begin().await?;
 
-        sqlx::query(
+        let result = sqlx::query(
             r#"INSERT INTO event_order_cancelled
                (signature, slot, market_id, order_id, user_pubkey, side, token_type,
                 remaining_quantity, event_timestamp)
@@ -488,7 +496,11 @@ impl Db {
         .execute(&mut *tx)
         .await?;
 
-        // Mark order as cancelled in live_orders
+        if result.rows_affected() == 0 {
+            tx.commit().await?;
+            return Ok(false);
+        }
+
         sqlx::query(
             r#"UPDATE live_orders
                SET status = 'cancelled', updated_at = NOW()
@@ -500,7 +512,7 @@ impl Db {
         .await?;
 
         tx.commit().await?;
-        Ok(())
+        Ok(true)
     }
 
     pub async fn store_market_order_executed(

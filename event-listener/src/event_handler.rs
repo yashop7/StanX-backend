@@ -74,7 +74,7 @@ pub async fn handle_event(sig: &str, slot: u64, data: &[u8], db: &Db) -> Result<
                 sig
             );
 
-            if let Err(e) = db.store_order_placed(
+            let inserted = match db.store_order_placed(
                 sig,
                 slot,
                 ev.market_id as i32,
@@ -88,22 +88,27 @@ pub async fn handle_event(sig: &str, slot: u64, data: &[u8], db: &Db) -> Result<
             )
             .await
             {
-                // FK violation (code 23503) means the market was never indexed.
-                // This happens when the indexer was down during MarketInitialized.
-                // Skip this order — it will be recovered by the backfill on next restart.
-                let err_str = e.to_string();
-                let is_fk_violation = err_str.contains("23503")
-                    || err_str.contains("foreign key constraint");
+                Ok(v) => v,
+                Err(e) => {
+                    let err_str = e.to_string();
+                    let is_fk_violation = err_str.contains("23503")
+                        || err_str.contains("foreign key constraint");
 
-                if is_fk_violation {
-                    log::warn!(
-                        "Skipping OrderPlaced sig={} market={} order={}: \
-                         market not in DB (missed MarketInitialized — run backfill)",
-                        sig, ev.market_id, ev.order_id
-                    );
-                    return Ok(());
+                    if is_fk_violation {
+                        log::warn!(
+                            "Skipping OrderPlaced sig={} market={} order={}: \
+                             market not in DB (missed MarketInitialized — run backfill)",
+                            sig, ev.market_id, ev.order_id
+                        );
+                        return Ok(());
+                    }
+                    return Err(e);
                 }
-                return Err(e);
+            };
+
+            if !inserted {
+                log::debug!("OrderPlaced duplicate, skipping publish: sig={} order={}", sig, ev.order_id);
+                return Ok(());
             }
 
             // Build the LiveOrder and push it into the correct side of the diff
@@ -148,7 +153,7 @@ pub async fn handle_event(sig: &str, slot: u64, data: &[u8], db: &Db) -> Result<
                 sig
             );
 
-            db.store_order_matched(
+            let inserted = db.store_order_matched(
                 sig,
                 slot,
                 ev.market_id as i32,
@@ -163,6 +168,11 @@ pub async fn handle_event(sig: &str, slot: u64, data: &[u8], db: &Db) -> Result<
                 ev.timestamp,
             )
             .await?;
+
+            if !inserted {
+                log::debug!("OrderMatched duplicate, skipping publish: sig={} maker={}", sig, ev.maker_order_id);
+                return Ok(());
+            }
 
             let mut diff = OrderbookDiff::new(slot as u64, ev.market_id as i32);
 
@@ -285,7 +295,7 @@ pub async fn handle_event(sig: &str, slot: u64, data: &[u8], db: &Db) -> Result<
                 sig
             );
 
-            db.store_order_cancelled(
+            let inserted = db.store_order_cancelled(
                 sig,
                 slot,
                 ev.market_id as i32,
@@ -297,6 +307,11 @@ pub async fn handle_event(sig: &str, slot: u64, data: &[u8], db: &Db) -> Result<
                 ev.timestamp,
             )
             .await?;
+
+            if !inserted {
+                log::debug!("OrderCancelled duplicate, skipping publish: sig={} order={}", sig, ev.order_id);
+                return Ok(());
+            }
 
             let mut diff = OrderbookDiff::new(slot as u64, ev.market_id as i32);
             match (&ev.token_type, &ev.side) {
