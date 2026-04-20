@@ -20,9 +20,7 @@ const DISC_MARKET_CLOSED: [u8; 8] = [86, 91, 119, 43, 94, 0, 217, 113];
 const DISC_METADATA_UPDATED: [u8; 8] = [132, 36, 215, 246, 166, 90, 189, 44];
 const DISC_FUNDS_CLAIMED: [u8; 8] = [202, 115, 101, 227, 91, 111, 239, 217];
 
-/// Decode and persist a single base64-decoded program-data payload.
-/// The first 8 bytes are the Anchor event discriminator; the rest is Borsh data.
-pub async fn handle_event(sig: &str, slot: u64, data: &[u8], db: &Db) -> Result<()> {
+fn make_redis_publisher() -> Result<redis::Connection> {
     let redis_port =
         env::var("REDIS_PORT").map_err(|_| anyhow::anyhow!("REDIS_PORT not set in environment"))?;
     let redis_address = env::var("REDIS_ADDRESS")
@@ -33,12 +31,16 @@ pub async fn handle_event(sig: &str, slot: u64, data: &[u8], db: &Db) -> Result<
     } else {
         format!("redis://default:{}@{}:{}", redis_password, redis_address, redis_port)
     };
+    let client = redis::Client::open(redis_url.clone())
+        .map_err(|e| anyhow::anyhow!("Failed to open Redis client at {}: {}", redis_url, e))?;
+    client
+        .get_connection()
+        .map_err(|e| anyhow::anyhow!("Failed to connect to Redis at {}: {}", redis_url, e))
+}
 
-    let redis_client = redis::Client::open(redis_url.clone())
-        .map_err(|e| anyhow::anyhow!("Failed to connect to Redis at {}: {}", redis_url, e))?;
-
-    let mut publisher = redis_client.get_connection()?;
-
+/// Decode and persist a single base64-decoded program-data payload.
+/// The first 8 bytes are the Anchor event discriminator; the rest is Borsh data.
+pub async fn handle_event(sig: &str, slot: u64, data: &[u8], db: &Db) -> Result<()> {
     if data.len() < 8 {
         return Ok(());
     }
@@ -111,6 +113,14 @@ pub async fn handle_event(sig: &str, slot: u64, data: &[u8], db: &Db) -> Result<
                 return Ok(());
             }
 
+            let mut publisher = match make_redis_publisher() {
+                Ok(p) => p,
+                Err(e) => {
+                    log::error!("Redis unavailable for OrderPlaced sig={}: {}", sig, e);
+                    return Ok(());
+                }
+            };
+
             // Build the LiveOrder and push it into the correct side of the diff
             let order = LiveOrder {
                 order_id: ev.order_id as i64,
@@ -127,6 +137,7 @@ pub async fn handle_event(sig: &str, slot: u64, data: &[u8], db: &Db) -> Result<
             };
 
             let mut diff = OrderbookDiff::new(slot as u64, ev.market_id as i32);
+            
             match (&ev.token_type, &ev.side) {
                 (crate::types::TokenType::Yes, crate::types::OrderSide::Buy) => {
                     diff.yes_bids_added.push(order)
@@ -173,6 +184,14 @@ pub async fn handle_event(sig: &str, slot: u64, data: &[u8], db: &Db) -> Result<
                 log::debug!("OrderMatched duplicate, skipping publish: sig={} maker={}", sig, ev.maker_order_id);
                 return Ok(());
             }
+
+            let mut publisher = match make_redis_publisher() {
+                Ok(p) => p,
+                Err(e) => {
+                    log::error!("Redis unavailable for OrderMatched sig={}: {}", sig, e);
+                    return Ok(());
+                }
+            };
 
             let mut diff = OrderbookDiff::new(slot as u64, ev.market_id as i32);
 
@@ -312,6 +331,14 @@ pub async fn handle_event(sig: &str, slot: u64, data: &[u8], db: &Db) -> Result<
                 log::debug!("OrderCancelled duplicate, skipping publish: sig={} order={}", sig, ev.order_id);
                 return Ok(());
             }
+
+            let mut publisher = match make_redis_publisher() {
+                Ok(p) => p,
+                Err(e) => {
+                    log::error!("Redis unavailable for OrderCancelled sig={}: {}", sig, e);
+                    return Ok(());
+                }
+            };
 
             let mut diff = OrderbookDiff::new(slot as u64, ev.market_id as i32);
             match (&ev.token_type, &ev.side) {

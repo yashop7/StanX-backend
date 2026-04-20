@@ -35,7 +35,7 @@ pub async fn run(state: &AppState, redis_url: String) {
         };
 
         if channel.starts_with("orderbook:market:") {
-            // ── Orderbook diff ────────────────────────────────────────────
+            // Orderbook diff
             let diff: OrderbookDiff = match serde_json::from_str(&payload) {
                 Ok(d) => d,
                 Err(e) => {
@@ -61,6 +61,7 @@ pub async fn run(state: &AppState, redis_url: String) {
                 map.insert(diff.market_id, Arc::new(new_snap));
             }
 
+            // Pushing the Updates to the Subscribers to the Orderbook channel
             if let Ok(ch) = state.ob_channels.read() {
                 if let Some(tx) = ch.get(&diff.market_id) {
                     let _ = tx.send(diff);
@@ -68,7 +69,7 @@ pub async fn run(state: &AppState, redis_url: String) {
             }
 
         } else if channel.starts_with("trades:market:") {
-            // ── Trade tick ────────────────────────────────────────────────
+            // Trade tick
             let tick: TradeTick = match serde_json::from_str(&payload) {
                 Ok(t) => t,
                 Err(e) => {

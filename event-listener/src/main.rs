@@ -51,7 +51,7 @@ async fn main() -> Result<()> {
         format!("redis://default:{}@{}:{}", redis_password, redis_address, redis_port)
     };
     let http_url = env::var("SOLANA_HTTP_RPC_URL")
-        .unwrap_or_else(|_| "https://apidevnet.solana.com".to_string());
+        .unwrap_or_else(|_| "https://api.devnet.solana.com".to_string());
     
     let db = Db::new(&db_url).await?;
     let rpc_client = RpcClient::new(http_url);
