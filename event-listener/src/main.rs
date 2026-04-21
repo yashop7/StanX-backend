@@ -80,7 +80,7 @@ async fn main() -> Result<()> {
     });
 
 
-    // Spawn Helius webhook HTTP server
+    // Spawning Helius webhook HTTP server
     let webhook_db = db.clone();
     tokio::spawn(async move {
         let app = webhook::webhook_router(webhook_db);
@@ -94,6 +94,14 @@ async fn main() -> Result<()> {
 
     if let Err(e) = backfill(&*db, &rpc_client, &program_id).await {
         log::error!("Backfill failed: {}", e);
+    }
+
+    // WS listener is disabled when HELIUS_WEBHOOK_ONLY=true to avoid
+    // duplicate events (and the lock contention that comes with them)
+    // when the Helius webhook is the primary event source.
+    if env::var("HELIUS_WEBHOOK_ONLY").as_deref() == Ok("true") {
+        log::info!("HELIUS_WEBHOOK_ONLY=true, WS listener disabled, running webhook-only mode");
+        std::future::pending::<()>().await;
     }
 
     let mut backoff_secs: u64 = 1;
