@@ -1959,6 +1959,7 @@ version = "0.1.0"
 dependencies = [
  "anchor-lang",
  "anyhow",
+ "axum",
  "base64 0.22.1",
  "chrono",
  "common",
@@ -1977,6 +1978,7 @@ dependencies = [
  "solana-sdk",
  "solana-transaction-status",
  "tokio",
+ "tower-http 0.5.2",
 ]
 
 [[package]]

@@ -1,10 +1,12 @@
 mod event_handler;
 mod types;
+mod webhook;
 
 use std::{
     collections::HashSet,
     env,
     str::FromStr,
+    sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -53,7 +55,7 @@ async fn main() -> Result<()> {
     let http_url = env::var("SOLANA_HTTP_RPC_URL")
         .unwrap_or_else(|_| "https://api.devnet.solana.com".to_string());
     
-    let db = Db::new(&db_url).await?;
+    let db = Arc::new(Db::new(&db_url).await?);
     let rpc_client = RpcClient::new(http_url);
 
     let filter = RpcTransactionLogsFilter::Mentions(vec![program_id.to_string()]);
@@ -78,7 +80,19 @@ async fn main() -> Result<()> {
     });
 
 
-    if let Err(e) = backfill(&db, &rpc_client, &program_id).await {
+    // Spawn Helius webhook HTTP server
+    let webhook_db = db.clone();
+    tokio::spawn(async move {
+        let app = webhook::webhook_router(webhook_db);
+        let webhook_port = env::var("WEBHOOK_PORT").unwrap_or_else(|_| "3004".to_string());
+        let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", webhook_port))
+            .await
+            .expect("Failed to bind webhook port");
+        log::info!("Webhook server listening on port {}", webhook_port);
+        axum::serve(listener, app).await.expect("Webhook server failed");
+    });
+
+    if let Err(e) = backfill(&*db, &rpc_client, &program_id).await {
         log::error!("Backfill failed: {}", e);
     }
 
@@ -137,7 +151,7 @@ async fn main() -> Result<()> {
                 if let Some(val) = log.strip_prefix("Program data: ") {
                     // Data is Base 64 Encoded
                     if let Ok(data) = B64.decode(val) {
-                        if let Err(e) = event_handler::handle_event(signature, slot, &data, &db).await {
+                        if let Err(e) = event_handler::handle_event(signature, slot, &data, &*db).await {
                             log::error!(
                                 "Event handling error sig={}: {} | raw_hex={}",
                                 signature,
@@ -266,7 +280,7 @@ pub async fn backfill(db: &Db, rpc_client: &RpcClient, program_id: &Pubkey) -> R
         for log_line in logs {
             if let Some(val) = log_line.strip_prefix("Program data: ") {
                 if let Ok(data) = B64.decode(val) {
-                    if let Err(e) = handle_event(&sig_info.signature, slot, &data, &db).await {
+                    if let Err(e) = handle_event(&sig_info.signature, slot, &data, db).await {
                         log::error!(
                             "Backfill event error sig={}: {} | raw_hex={}",
                             sig_str,
