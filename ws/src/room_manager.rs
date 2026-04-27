@@ -102,7 +102,7 @@ impl RoomManager {
 
         for user_id in users {
             if let Some(user) = self.clients.get(user_id) {
-                let _ = user.emit(message.clone());
+                let _ = user.emit(message.clone()).await;
             }
         }
         Ok(())
